@@ -13,7 +13,7 @@ app = FastAPI(
 @app.get("/")
 def root():
     return {
-        
+        "message": "DocChat AI backend running"
     }
 
 
