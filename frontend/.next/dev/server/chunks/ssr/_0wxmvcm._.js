@@ -12,11 +12,11 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 ;
 function Header() {
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("header", {
-        className: " h-16 border-b border-slate-200 bg-white flex items-center justify-between px-6 ",
+        className: "   h-16   border-b   border-slate-200   bg-white   flex   items-center   justify-between   px-6   ",
         children: [
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$react$2d$server$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["default"], {
                 href: "/",
-                className: " text-xl font-bold tracking-tight text-slate-900 ",
+                className: "   text-xl   font-bold   tracking-tight   text-slate-900   ",
                 children: "DocChatAI"
             }, void 0, false, {
                 fileName: "[project]/components/layout/Header.tsx",
@@ -24,18 +24,18 @@ function Header() {
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: " flex items-center gap-6 ",
+                className: "   flex   items-center   gap-6   ",
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
                         placeholder: "Search documents...",
-                        className: " h-10 w-64 border border-slate-300 px-4 text-sm outline-none focus:border-blue-600 "
+                        className: "   h-10   w-64   border   border-slate-300   px-4   text-sm   outline-none   focus:border-blue-600   "
                     }, void 0, false, {
                         fileName: "[project]/components/layout/Header.tsx",
                         lineNumber: 35,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
-                        className: " text-sm font-medium ",
+                        className: "   text-sm   font-medium   ",
                         children: "Account"
                     }, void 0, false, {
                         fileName: "[project]/components/layout/Header.tsx",
@@ -87,10 +87,10 @@ const navigation = [
 ];
 function Sidebar() {
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("aside", {
-        className: " w-64 border-r border-slate-200 bg-white min-h-screen p-6 ",
+        className: "   w-64   border-r   border-slate-200   bg-white   min-h-screen   p-6   ",
         children: [
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: " text-xs uppercase tracking-wider text-slate-500 mb-6 ",
+                className: "   text-xs   uppercase   tracking-wider   text-slate-500   mb-6   ",
                 children: "Workspace"
             }, void 0, false, {
                 fileName: "[project]/components/layout/Sidebar.tsx",
@@ -98,10 +98,10 @@ function Sidebar() {
                 columnNumber: 1
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("nav", {
-                className: " space-y-2 ",
+                className: "   space-y-2   ",
                 children: navigation.map((item)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$react$2d$server$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["default"], {
                         href: item.href,
-                        className: " block px-4 py-3 text-sm border border-transparent hover:border-slate-300 hover:bg-slate-50 transition ",
+                        className: "   block   px-4   py-3   text-sm   border   border-transparent   hover:border-slate-300   hover:bg-slate-50   transition   ",
                         children: item.name
                     }, item.name, false, {
                         fileName: "[project]/components/layout/Sidebar.tsx",
@@ -114,10 +114,10 @@ function Sidebar() {
                 columnNumber: 1
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: " absolute bottom-8 px-6 ",
+                className: "   absolute   bottom-8   px-6   ",
                 children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$react$2d$server$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["default"], {
                     href: "/settings",
-                    className: " text-sm text-slate-600 ",
+                    className: "   text-sm   text-slate-600   ",
                     children: "Settings"
                 }, void 0, false, {
                     fileName: "[project]/components/layout/Sidebar.tsx",
@@ -178,7 +178,7 @@ function RootLayout({ children }) {
                                 columnNumber: 13
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["jsxDEV"])("main", {
-                                className: " flex-1 min-h-screen p-8 bg-slate-50 ",
+                                className: "   flex-1   min-h-screen   p-8   bg-slate-50   ",
                                 children: children
                             }, void 0, false, {
                                 fileName: "[project]/app/layout.tsx",
