@@ -1,12 +1,9 @@
 import "./globals.css";
 
-import Header from "@/components/layout/Header";
-import Sidebar from "@/components/layout/Sidebar";
-
 export const metadata = {
-  title: "DocChatAI",
+  title: "DocChatAI — Turn Information Into Intelligence",
   description:
-    "AI-powered document intelligence platform. Upload, analyze, and chat with your documents.",
+    "Upload, analyze, understand, translate, compare, research, and create with your documents using AI.",
 };
 
 export default function RootLayout({
@@ -16,32 +13,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
-        <div className="min-h-screen bg-slate-50">
-
-          {/* Top Navigation */}
-          <Header />
-
-          <div className="flex">
-
-            {/* Left Navigation */}
-            <Sidebar />
-
-
-            {/* Main Workspace */}
-            <main className="
-              flex-1
-              min-h-screen
-              p-8
-              bg-slate-50
-            ">
-              {children}
-            </main>
-
-
-          </div>
-
-        </div>
+      <body className="bg-white text-slate-950 antialiased">
+        {children}
       </body>
     </html>
   );

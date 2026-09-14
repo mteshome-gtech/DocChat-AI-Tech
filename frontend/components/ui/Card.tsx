@@ -9,14 +9,13 @@ export default function Card({
   children,
   className = "",
 }: CardProps) {
-
   return (
     <div
       className={`
         border
-        border-slate-200
+        border-[#deddd7]
         bg-white
-        shadow-sm
+        shadow-[0_12px_40px_rgba(0,0,0,0.035)]
         ${className}
       `}
     >
