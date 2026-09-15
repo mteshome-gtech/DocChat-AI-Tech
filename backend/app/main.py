@@ -21,6 +21,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://docchat-ai-zeta.vercel.app",
+        "https://docchat-h9ncsqkwm-doc-chat-ai.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
