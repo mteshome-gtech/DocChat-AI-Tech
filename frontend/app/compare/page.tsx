@@ -64,11 +64,9 @@ export default function ComparePage() {
           .single();
 
         const userPlan: Plan =
-          data?.plan === "business"
-            ? "business"
-            : data?.plan === "pro"
-              ? "pro"
-              : "free";
+          data?.plan === "pro"
+            ? "pro"
+            : "free";
 
         setPlan(userPlan);
 

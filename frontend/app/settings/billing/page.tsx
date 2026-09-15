@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Plan = "free" | "pro";
@@ -41,32 +42,24 @@ const plans = {
   },
 } as const;
 
-export default function BillingPage() {
+function BillingContent() {
   const supabase = createClient();
   const searchParams = useSearchParams();
 
   const [plan, setPlan] = useState<Plan>("free");
-
   const [subscriptionStatus, setSubscriptionStatus] =
     useState("inactive");
-
   const [subscriptionPeriodEnd, setSubscriptionPeriodEnd] =
     useState<string | null>(null);
-
   const [loading, setLoading] = useState(true);
-
   const [changingPlan, setChangingPlan] =
     useState<Plan | null>(null);
-
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
   const [showUpgradeModal, setShowUpgradeModal] =
     useState(false);
-
   const [showCancelModal, setShowCancelModal] =
     useState(false);
-
   const [paymentProcessing, setPaymentProcessing] =
     useState(false);
 
@@ -95,11 +88,9 @@ export default function BillingPage() {
 
       if (error) {
         console.error("Error loading plan:", error);
-
         setError(
           "Unable to load your billing information."
         );
-
         setLoading(false);
         return;
       }
@@ -123,7 +114,6 @@ export default function BillingPage() {
       }
     } catch (err) {
       console.error(err);
-
       setError(
         "Unable to load your billing information."
       );
@@ -190,15 +180,6 @@ export default function BillingPage() {
         return;
       }
 
-      /*
-       * IMPORTANT:
-       *
-       * If the user is still inside an existing paid
-       * period and the subscription is canceling,
-       * NEVER create another Checkout session.
-       *
-       * Reactivate the existing subscription instead.
-       */
       if (isCanceling) {
         await reactivateSubscription();
         return;
@@ -285,11 +266,6 @@ export default function BillingPage() {
     setError("");
     setMessage("");
 
-    /*
-     * A canceling subscription is NOT a new upgrade.
-     *
-     * It should be resumed.
-     */
     if (isCanceling) {
       reactivateSubscription();
       return;
@@ -304,7 +280,6 @@ export default function BillingPage() {
 
   function closeUpgradeConfirmation() {
     if (paymentProcessing) return;
-
     setShowUpgradeModal(false);
   }
 
@@ -312,7 +287,6 @@ export default function BillingPage() {
     if (paymentProcessing) return;
 
     setShowUpgradeModal(false);
-
     await startProCheckout();
   }
 
@@ -446,12 +420,6 @@ export default function BillingPage() {
         );
       }
 
-      /*
-       * Existing subscription has expired.
-       *
-       * We are now legitimately allowed to
-       * start a NEW Checkout session.
-       */
       if (data.expired) {
         setPlan("free");
         setSubscriptionStatus(
@@ -466,12 +434,7 @@ export default function BillingPage() {
         return;
       }
 
-      /*
-       * Existing subscription was successfully
-       * reactivated.
-       */
       setPlan("pro");
-
       setSubscriptionStatus("active");
 
       setSubscriptionPeriodEnd(
@@ -546,9 +509,6 @@ export default function BillingPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-10">
-
-      {/* Stripe return messages */}
-
       {paymentSuccess && (
         <div className="border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
           Payment completed. Your Pro subscription is being activated.
@@ -560,8 +520,6 @@ export default function BillingPage() {
           Checkout was canceled. Your current plan has not changed.
         </div>
       )}
-
-      {/* Header */}
 
       <div>
         <Link
@@ -586,8 +544,6 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* Messages */}
-
       {message && (
         <div className="border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
           {message}
@@ -600,10 +556,7 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* Current Plan */}
-
       <section className="border border-slate-200 bg-white">
-
         <div className="border-b border-slate-200 px-6 py-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
             Current Plan
@@ -617,7 +570,6 @@ export default function BillingPage() {
         </div>
 
         <div className="grid gap-8 px-6 py-7 md:grid-cols-2">
-
           <div>
             <p className="text-sm text-slate-500">
               Subscription status
@@ -668,16 +620,12 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* Features */}
-
         <div className="border-t border-slate-200 px-6 py-7">
-
           <p className="text-sm font-medium text-slate-950">
             Included features
           </p>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2">
-
             {currentPlan.features.map(
               (feature) => (
                 <div
@@ -692,15 +640,11 @@ export default function BillingPage() {
                 </div>
               )
             )}
-
           </div>
         </div>
 
-        {/* Active Pro */}
-
         {isActivePro && (
           <div className="border-t border-slate-200 px-6 py-6">
-
             <button
               type="button"
               onClick={() =>
@@ -713,15 +657,11 @@ export default function BillingPage() {
             >
               Cancel Pro
             </button>
-
           </div>
         )}
 
-        {/* Canceling Pro */}
-
         {isCanceling && (
           <div className="border-t border-slate-200 bg-amber-50 px-6 py-6">
-
             <p className="text-sm font-medium text-amber-900">
               Pro cancellation scheduled
             </p>
@@ -749,15 +689,11 @@ export default function BillingPage() {
                 ? "Reactivating..."
                 : "Keep Pro"}
             </button>
-
           </div>
         )}
       </section>
 
-      {/* Available Plans */}
-
       <section>
-
         <div className="mb-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
             Available Plans
@@ -769,7 +705,6 @@ export default function BillingPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-
           {(
             Object.entries(
               plans
@@ -779,7 +714,6 @@ export default function BillingPage() {
             ][]
           ).map(
             ([planKey, planData]) => {
-
               const isCurrent =
                 planKey === plan;
 
@@ -792,10 +726,8 @@ export default function BillingPage() {
 
               const buttonDisabled =
                 changingPlan !== null ||
-                (
-                  isCurrent &&
-                  !showResume
-                );
+                (isCurrent &&
+                  !showResume);
 
               return (
                 <div
@@ -806,7 +738,6 @@ export default function BillingPage() {
                       : "border-slate-200"
                   }`}
                 >
-
                   {isProCard && (
                     <div className="mb-5 inline-block border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-blue-600">
                       Recommended
@@ -834,7 +765,6 @@ export default function BillingPage() {
                   </div>
 
                   <div className="mt-7 space-y-3">
-
                     {planData.features.map(
                       (feature) => (
                         <div
@@ -849,33 +779,32 @@ export default function BillingPage() {
                         </div>
                       )
                     )}
-
                   </div>
 
                   <button
                     type="button"
                     disabled={buttonDisabled}
                     onClick={() => {
-                      if(
+                      if (
                         isProCard &&
                         isCanceling
-                      ){
+                      ) {
                         reactivateSubscription();
                         return;
                       }
 
-                      if(
+                      if (
                         isProCard &&
                         !isCurrent
-                      ){
+                      ) {
                         openUpgradeConfirmation();
                         return;
                       }
 
-                      if(
+                      if (
                         planKey === "free" &&
                         plan === "pro"
-                      ){
+                      ) {
                         setShowCancelModal(true);
                       }
                     }}
@@ -889,7 +818,6 @@ export default function BillingPage() {
                             : "border-slate-300 bg-white text-slate-900 hover:bg-slate-50"
                     }`}
                   >
-
                     {changingPlan ===
                     planKey
                       ? "Processing..."
@@ -900,26 +828,18 @@ export default function BillingPage() {
                           : isProCard
                             ? "Upgrade to Pro"
                             : "Downgrade to Free"}
-
                   </button>
-
                 </div>
               );
             }
           )}
-
         </div>
       </section>
 
-      {/* Upgrade Confirmation */}
-
       {showUpgradeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-5">
-
           <div className="w-full max-w-lg border border-slate-200 bg-white shadow-2xl">
-
             <div className="border-b border-slate-200 px-7 py-6">
-
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
                 Upgrade
               </p>
@@ -931,31 +851,24 @@ export default function BillingPage() {
               <p className="mt-3 text-sm leading-6 text-slate-500">
                 You are about to upgrade your DocChatAI account to the Pro plan.
               </p>
-
             </div>
 
             <div className="px-7 py-6">
-
               <div className="border border-slate-200 bg-slate-50 p-5">
-
                 <div className="flex items-center justify-between">
-
                   <span className="text-sm font-medium text-slate-950">
                     DocChatAI Pro
                   </span>
 
                   <span className="text-lg font-semibold text-slate-950">
                     $19.99
-
                     <span className="ml-1 text-xs font-normal text-slate-500">
                       / month
                     </span>
                   </span>
-
                 </div>
 
                 <div className="mt-4 space-y-2">
-
                   {plans.pro.features.map(
                     (feature) => (
                       <div
@@ -970,27 +883,21 @@ export default function BillingPage() {
                       </div>
                     )
                   )}
-
                 </div>
-
               </div>
 
               <div className="mt-5 border border-amber-200 bg-amber-50 px-4 py-4">
-
                 <p className="text-sm leading-6 text-amber-800">
                   You will be redirected to Stripe's secure payment page to enter and verify your payment information. Your subscription will be billed at $19.99 per month.
                 </p>
-
               </div>
 
               <p className="mt-5 text-xs leading-5 text-slate-400">
                 Your Pro access will be activated after Stripe confirms the subscription. If you cancel payment, your Free plan will remain active.
               </p>
-
             </div>
 
             <div className="flex flex-col gap-3 border-t border-slate-200 px-7 py-5 sm:flex-row sm:justify-end">
-
               <button
                 type="button"
                 onClick={
@@ -1018,21 +925,15 @@ export default function BillingPage() {
                   ? "Preparing payment..."
                   : "Continue to Payment →"}
               </button>
-
             </div>
           </div>
         </div>
       )}
 
-      {/* Cancel Confirmation */}
-
       {showCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-5">
-
           <div className="w-full max-w-lg border border-slate-200 bg-white shadow-2xl">
-
             <div className="border-b border-slate-200 px-7 py-6">
-
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600">
                 Cancel Pro
               </p>
@@ -1044,13 +945,10 @@ export default function BillingPage() {
               <p className="mt-3 text-sm leading-6 text-slate-500">
                 Your subscription will not renew at the end of your current billing period.
               </p>
-
             </div>
 
             <div className="px-7 py-6">
-
               <div className="border border-amber-200 bg-amber-50 p-5">
-
                 <p className="text-sm font-medium text-amber-900">
                   You will keep Pro access.
                 </p>
@@ -1063,17 +961,14 @@ export default function BillingPage() {
                   </strong>
                   . You will not be charged for the next billing period.
                 </p>
-
               </div>
 
               <p className="mt-5 text-xs leading-5 text-slate-400">
                 You can change your mind and select Keep Pro before the paid period ends. Doing so will keep your existing subscription active without creating a new charge.
               </p>
-
             </div>
 
             <div className="flex flex-col gap-3 border-t border-slate-200 px-7 py-5 sm:flex-row sm:justify-end">
-
               <button
                 type="button"
                 onClick={() =>
@@ -1101,13 +996,18 @@ export default function BillingPage() {
                   ? "Canceling..."
                   : "Confirm Cancellation"}
               </button>
-
             </div>
-
           </div>
         </div>
       )}
-
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={null}>
+      <BillingContent />
+    </Suspense>
   );
 }

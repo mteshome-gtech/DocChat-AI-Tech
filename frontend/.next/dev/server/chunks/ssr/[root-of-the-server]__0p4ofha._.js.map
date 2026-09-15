@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 10, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/Mike/DocChatAI/DocChatAI/frontend/app/page.tsx"],"sourcesContent":["import \"./globals.css\";\r\n\r\nexport const metadata = {\r\n  title: \"DocChatAI — Turn Information Into Intelligence\",\r\n  description:\r\n    \"Upload, analyze, understand, translate, compare, research, and create with your documents using AI.\",\r\n};\r\n\r\nexport default function RootLayout({\r\n  children,\r\n}: Readonly<{\r\n  children: React.ReactNode;\r\n}>) {\r\n  return (\r\n    <html lang=\"en\">\r\n      <body className=\"bg-white text-slate-950 antialiased\">\r\n        {children}\r\n      </body>\r\n    </html>\r\n  );\r\n}"],"names":["metadata","title","description","RootLayout","children","lang","className"],"mappings":";;;;;;;;;AAEO,MAAMA,WAAW;IACtBC,OAAO;IACPC,aACE;AACJ;AAEe,SAASC,WAAW,EACjCC,QAAQ,EAGR;IACA,qBACE,8OAAC;QAAKC,MAAK;kBACT,cAAA,8OAAC;YAAKC,WAAU;sBACbF;;;;;;;;;;;AAIT"}}]
-}

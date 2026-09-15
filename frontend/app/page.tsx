@@ -384,27 +384,6 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#f8f8f6] text-black">
-      <style jsx global>{`
-        @keyframes fadeUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        html {
-          scroll-behavior: smooth;
-        }
-
-        ::selection {
-          background: #111;
-          color: white;
-        }
-      `}</style>
 
       {/* NAVIGATION */}
       <nav className="fixed left-0 right-0 top-0 z-50 border-b border-black/10 bg-[#f8f8f6]/90 backdrop-blur-md">

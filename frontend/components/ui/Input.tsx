@@ -1,4 +1,4 @@
-```tsx
+
 import React from "react";
 
 interface InputProps
@@ -33,4 +33,4 @@ export default function Input({
     />
   );
 }
-```
+

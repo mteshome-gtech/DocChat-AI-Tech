@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense} from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function VerifyPage() {
+function VerifyContent() {
   const searchParams = useSearchParams();
   const plan = searchParams.get("plan") === "pro" ? "pro" : "free";
 
@@ -109,5 +110,13 @@ export default function VerifyPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={null}>
+      <VerifyContent />
+    </Suspense>
   );
 }

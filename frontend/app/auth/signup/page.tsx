@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -14,12 +14,10 @@ export default function SignupPage() {
   const initialPlan = requestedPlan === "pro" ? "pro" : "free";
 
   const [plan, setPlan] = useState<"free" | "pro">(initialPlan);
-
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -45,14 +43,16 @@ export default function SignupPage() {
 
     setLoading(true);
 
-    const redirectUrl = 
+    const redirectUrl =
       `${window.location.origin}/auth/callback?plan=${plan}`;
-    
+
     const { data, error } = await supabase.auth.signUp({
-      email, password, options: {
-        emailRedirectTo: redirectUrl, 
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
         data: {
-          full_name: name, 
+          full_name: name,
           selected_plan: plan,
         },
       },
@@ -122,7 +122,7 @@ export default function SignupPage() {
                     >
                       {item}
                     </span>
-                  ),
+                  )
                 )}
               </div>
             </div>
@@ -327,5 +327,13 @@ export default function SignupPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupContent />
+    </Suspense>
   );
 }
