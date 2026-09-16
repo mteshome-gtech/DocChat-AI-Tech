@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
 import { createClient } from "@/lib/supabase/client";
 
 import {
@@ -98,18 +97,15 @@ export default function DocumentsPage() {
 
       if (error) {
         console.error("Error loading documents:", error);
-
         setError(
           "Unable to load your documents. Please try again."
         );
-
         return;
       }
 
       setDocuments((data || []) as Document[]);
     } catch (error) {
       console.error("Error loading documents:", error);
-
       setError(
         "Unable to load your document library."
       );
@@ -145,12 +141,29 @@ export default function DocumentsPage() {
         }
       );
 
+      const contentType =
+        response.headers.get("content-type") || "";
+
       let data: PreviewResponse = {};
 
-      try {
-        data = await response.json();
-      } catch {
-        // Backend may return a non-JSON response.
+      if (contentType.includes("application/json")) {
+        try {
+          data = await response.json();
+        } catch {
+          data = {};
+        }
+      } else {
+        try {
+          const rawText = await response.text();
+
+          if (rawText) {
+            data = {
+              text: rawText,
+            };
+          }
+        } catch {
+          data = {};
+        }
       }
 
       if (!response.ok) {
