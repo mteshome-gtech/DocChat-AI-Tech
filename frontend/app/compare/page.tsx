@@ -22,6 +22,11 @@ type CompareResult = {
   similarities: string[];
 };
 
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000"
+).replace(/\/+$/, "");
+
 export default function ComparePage() {
   const supabase = createClient();
 
@@ -218,43 +223,77 @@ export default function ComparePage() {
         );
       }
 
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/compare",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            document_a_id: documentA,
-            document_b_id: documentB,
-            compare_type: compareType,
-            depth,
-          }),
-        }
-      );
+      let response: Response;
 
-      const data = await response.json();
+      try {
+        response = await fetch(
+          `${API_URL}/api/compare`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              document_a_id: documentA,
+              document_b_id: documentB,
+              compare_type: compareType,
+              depth,
+            }),
+          }
+        );
+      } catch (networkError) {
+        console.error(
+          "Compare network error:",
+          networkError
+        );
+
+        throw new Error(
+          `Unable to reach the DocChatAI API at ${API_URL}. Verify the production API URL and backend CORS configuration.`
+        );
+      }
+
+      const responseText =
+        await response.text();
+
+      let data: any = {};
+
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = {
+            detail: responseText,
+          };
+        }
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.detail ||
-            "Comparison failed. Please try again."
+            data?.message ||
+            `Comparison failed with status ${response.status}.`
         );
       }
 
       setResult({
-        summary: data.summary || "",
+        summary:
+          typeof data.summary === "string"
+            ? data.summary
+            : "",
+
         added: Array.isArray(data.added)
           ? data.added
           : [],
+
         removed: Array.isArray(data.removed)
           ? data.removed
           : [],
+
         modified: Array.isArray(data.modified)
           ? data.modified
           : [],
+
         similarities: Array.isArray(
           data.similarities
         )
@@ -322,9 +361,10 @@ export default function ComparePage() {
       <Link
         href="/dashboard"
         className="mb-2 inline-block text-sm text-slate-500 hover:text-slate-900"
-        >
-           ← Back to Dashboard
+      >
+        ← Back to Dashboard
       </Link>
+
       <section>
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
           AI Tools

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+
 import { createClient } from "@/lib/supabase/client";
 import { hasFeature, type Plan } from "@/lib/plans";
 
@@ -39,27 +40,32 @@ const MODES: {
   {
     id: "deep",
     label: "Deep Research",
-    description: "Broad research with detailed synthesis and evidence.",
+    description:
+      "Broad research with detailed synthesis and evidence.",
   },
   {
     id: "academic",
     label: "Academic",
-    description: "Research papers, evidence, methodology, and gaps.",
+    description:
+      "Research papers, evidence, methodology, and gaps.",
   },
   {
     id: "business",
     label: "Business",
-    description: "Markets, companies, strategy, and opportunities.",
+    description:
+      "Markets, companies, strategy, and opportunities.",
   },
   {
     id: "competitive",
     label: "Competitive",
-    description: "Competitors, positioning, products, and trends.",
+    description:
+      "Competitors, positioning, products, and trends.",
   },
   {
     id: "market",
     label: "Market Intelligence",
-    description: "Market trends, opportunities, and emerging signals.",
+    description:
+      "Market trends, opportunities, and emerging signals.",
   },
 ];
 
@@ -77,7 +83,6 @@ export default function ResearchPage() {
   const [loading, setLoading] = useState(true);
 
   const [question, setQuestion] = useState("");
-
   const [mode, setMode] = useState<ResearchMode>("deep");
   const [depth, setDepth] = useState<ResearchDepth>("deep");
 
@@ -86,12 +91,15 @@ export default function ResearchPage() {
 
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
-
   const [loadingDocuments, setLoadingDocuments] = useState(false);
-  const [researching, setResearching] = useState(false);
 
+  const [researching, setResearching] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ResearchResult | null>(null);
+
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://127.0.0.1:8000";
 
   useEffect(() => {
     async function load() {
@@ -105,16 +113,21 @@ export default function ResearchPage() {
           return;
         }
 
-        const { data } = await supabase
+        const { data, error: profileError } = await supabase
           .from("profiles")
           .select("plan")
           .eq("id", user.id)
           .single();
 
+        if (profileError) {
+          console.error(
+            "Profile loading error:",
+            profileError
+          );
+        }
+
         const userPlan: Plan =
-          data?.plan === "pro"
-            ? "pro"
-            : "free";
+          data?.plan === "pro" ? "pro" : "free";
 
         setPlan(userPlan);
 
@@ -122,7 +135,10 @@ export default function ResearchPage() {
           await loadDocuments();
         }
       } catch (error) {
-        console.error("Research workspace error:", error);
+        console.error(
+          "Research workspace error:",
+          error
+        );
       } finally {
         setLoading(false);
       }
@@ -143,7 +159,10 @@ export default function ResearchPage() {
         return;
       }
 
-      const { data, error: documentError } = await supabase
+      const {
+        data,
+        error: documentError,
+      } = await supabase
         .from("documents")
         .select("id, name, file_name")
         .eq("user_id", user.id)
@@ -159,7 +178,9 @@ export default function ResearchPage() {
         return;
       }
 
-      setDocuments((data ?? []) as DocumentItem[]);
+      setDocuments(
+        (data ?? []) as DocumentItem[]
+      );
     } catch (error) {
       console.error(
         "Document loading error:",
@@ -240,31 +261,55 @@ export default function ResearchPage() {
         );
       }
 
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/research",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            question: question.trim(),
-            mode,
-            depth,
-            use_web: useWeb,
-            use_documents: useDocuments,
-            document_ids: selectedDocuments,
-          }),
-        }
-      );
+      let response: Response;
 
-      const data = await response.json();
+      try {
+        response = await fetch(
+          `${API_URL}/api/research`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              question: question.trim(),
+              mode,
+              depth,
+              use_web: useWeb,
+              use_documents: useDocuments,
+              document_ids: selectedDocuments,
+            }),
+          }
+        );
+      } catch (networkError) {
+        console.error(
+          "Research network error:",
+          networkError
+        );
+
+        throw new Error(
+          `Unable to reach the DocChatAI API. Please verify the backend is running and the API URL is correct: ${API_URL}`
+        );
+      }
+
+      let data: {
+        answer?: string;
+        sources?: Source[];
+        queries?: string[];
+        detail?: string;
+      } = {};
+
+      try {
+        data = await response.json();
+      } catch {
+        // The server returned a non-JSON response.
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.detail ||
-            "Research failed. Please try again."
+            `Research request failed with status ${response.status}.`
         );
       }
 
@@ -319,27 +364,27 @@ export default function ResearchPage() {
           <div className="mx-auto flex h-14 w-14 items-center justify-center border border-blue-100 bg-blue-50 text-blue-600">
             ◎
           </div>
-          
-        
+
           <p className="mt-7 text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
-            Business Intelligence
-          </p>  
+            Pro Intelligence
+          </p>
 
           <h1 className="mt-4 text-3xl font-semibold text-slate-900">
             Advanced Research
           </h1>
 
           <p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-slate-500">
-            Combine your documents, shared knowledge,
-            and research sources into deeper
-            AI-powered reports.
+            Combine your documents and research
+            sources into deeper AI-powered reports,
+            evidence-based analysis, and research
+            insights.
           </p>
 
           <Link
             href="/settings/billing"
             className="mt-8 inline-block border border-blue-700 bg-blue-600 px-7 py-3 text-sm font-medium text-white transition hover:bg-blue-700"
           >
-            Upgrade to Business
+            Upgrade to Pro
           </Link>
         </div>
       </div>
@@ -351,9 +396,10 @@ export default function ResearchPage() {
       <Link
         href="/dashboard"
         className="mb-2 inline-block text-sm text-slate-500 hover:text-slate-900"
-        >
-           ← Back to Dashboard
+      >
+        ← Back to Dashboard
       </Link>
+
       <section>
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
           Business Intelligence
@@ -365,8 +411,7 @@ export default function ResearchPage() {
 
         <p className="mt-4 max-w-2xl text-base leading-7 text-slate-500">
           Conduct deeper research across your
-          organization's knowledge and selected
-          sources.
+          knowledge and selected sources.
         </p>
       </section>
 
@@ -378,8 +423,8 @@ export default function ResearchPage() {
             </label>
 
             <p className="mt-1 text-xs text-slate-400">
-              Ask a complex question and let DocChatAI
-              investigate the evidence.
+              Ask a complex question and let
+              DocChatAI investigate the evidence.
             </p>
           </div>
 
@@ -430,7 +475,7 @@ export default function ResearchPage() {
           </h2>
         </div>
 
-        <div className="mt-7 grid gap-4 md:grid-cols-2">
+        <div className="mt-7 grid gap-8 md:grid-cols-2">
           <div>
             <p className="mb-3 text-sm font-medium text-slate-900">
               Research mode
@@ -438,8 +483,7 @@ export default function ResearchPage() {
 
             <div className="space-y-2">
               {MODES.map((item) => {
-                const selected =
-                  mode === item.id;
+                const selected = mode === item.id;
 
                 return (
                   <button
@@ -475,79 +519,137 @@ export default function ResearchPage() {
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div>
-              <p className="mb-3 text-sm font-medium text-slate-900">
-                Research depth
-              </p>
+          <div>
+            <p className="mb-3 text-sm font-medium text-slate-900">
+              Research depth
+            </p>
 
-              <div className="grid grid-cols-3 gap-2">
-                {(
-                  [
-                    "quick",
-                    "standard",
-                    "deep",
-                  ] as ResearchDepth[]
-                ).map((item) => {
-                  const selected =
-                    depth === item;
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  {
+                    id: "quick",
+                    label: "Quick",
+                    description: "Fast overview",
+                  },
+                  {
+                    id: "standard",
+                    label: "Standard",
+                    description: "Balanced analysis",
+                  },
+                  {
+                    id: "deep",
+                    label: "Deep",
+                    description: "Detailed synthesis",
+                  },
+                ] as {
+                  id: ResearchDepth;
+                  label: string;
+                  description: string;
+                }[]
+              ).map((item) => {
+                const selected =
+                  depth === item.id;
 
-                  return (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() =>
-                        setDepth(item)
-                      }
-                      className={`border px-3 py-3 text-xs font-medium capitalize transition ${
-                        selected
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-blue-300"
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  );
-                })}
-              </div>
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      setDepth(item.id)
+                    }
+                    className={`border p-4 text-left transition ${
+                      selected
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-slate-200 bg-white hover:border-blue-300"
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-slate-900">
+                      {item.label}
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      {item.description}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
 
-            <div>
-              <p className="mb-3 text-sm font-medium text-slate-900">
+            <div className="mt-6 space-y-3">
+              <p className="text-sm font-medium text-slate-900">
                 Research sources
               </p>
 
-              <div className="space-y-2">
-                <SourceCard
-                  title="My Documents"
-                  description="Use your private document library."
-                  selected={useDocuments}
-                  onClick={() =>
-                    setUseDocuments(
-                      (current) => !current
-                    )
-                  }
-                />
+              <button
+                type="button"
+                onClick={() => {
+                  setUseWeb((current) => !current);
+                  setError("");
+                }}
+                className={`flex w-full items-center justify-between border p-4 text-left transition ${
+                  useWeb
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-slate-200 bg-white"
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-medium text-slate-900">
+                    Web research
+                  </p>
 
-                <SourceCard
-                  title="Research Sources"
-                  description="Search current external information."
-                  selected={useWeb}
-                  onClick={() =>
-                    setUseWeb(
-                      (current) => !current
-                    )
-                  }
-                />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Search external sources for current
+                    information.
+                  </p>
+                </div>
 
-                <SourceCard
-                  title="Shared Knowledge"
-                  description="Use organizational knowledge when available."
-                  selected={false}
-                  disabled
-                  onClick={() => {}}
-                />
-              </div>
+                <span
+                  className={`text-xs font-semibold ${
+                    useWeb
+                      ? "text-blue-600"
+                      : "text-slate-400"
+                  }`}
+                >
+                  {useWeb ? "ON" : "OFF"}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUseDocuments(
+                    (current) => !current
+                  );
+                  setError("");
+                }}
+                className={`flex w-full items-center justify-between border p-4 text-left transition ${
+                  useDocuments
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-slate-200 bg-white"
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-medium text-slate-900">
+                    My documents
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Include information from your uploaded
+                    documents.
+                  </p>
+                </div>
+
+                <span
+                  className={`text-xs font-semibold ${
+                    useDocuments
+                      ? "text-blue-600"
+                      : "text-slate-400"
+                  }`}
+                >
+                  {useDocuments ? "ON" : "OFF"}
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -555,7 +657,7 @@ export default function ResearchPage() {
 
       {useDocuments && (
         <section className="border border-slate-200 bg-white p-8">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
                 Knowledge base
@@ -565,22 +667,20 @@ export default function ResearchPage() {
                 Select documents
               </h2>
 
-              <p className="mt-1 text-xs text-slate-500">
-                Choose which private documents
-                should be included in the research.
+              <p className="mt-1 text-xs text-slate-400">
+                Choose which documents should inform
+                your research.
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={selectAllDocuments}
-                disabled={
-                  documents.length === 0
-                }
-                className="border border-slate-200 px-3 py-2 text-xs text-slate-600 transition hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={documents.length === 0}
+                className="border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Select all
+                Select All
               </button>
 
               <button
@@ -589,157 +689,148 @@ export default function ResearchPage() {
                 disabled={
                   selectedDocuments.length === 0
                 }
-                className="border border-slate-200 px-3 py-2 text-xs text-slate-600 transition hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 transition hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Clear
               </button>
             </div>
           </div>
 
-          <div className="mt-6 border border-slate-200">
-            {loadingDocuments ? (
-              <div className="p-6 text-sm text-slate-400">
-                Loading documents...
-              </div>
-            ) : documents.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-sm font-medium text-slate-700">
-                  No documents found
-                </p>
+          {loadingDocuments ? (
+            <div className="mt-6 border border-slate-200 bg-slate-50 p-6 text-sm text-slate-400">
+              Loading documents...
+            </div>
+          ) : documents.length === 0 ? (
+            <div className="mt-6 border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+              <p className="text-sm font-medium text-slate-700">
+                No documents available
+              </p>
 
-                <p className="mt-2 text-xs text-slate-400">
-                  Upload documents before using
-                  private document research.
-                </p>
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+                Upload a document first if you want
+                Research to use your private knowledge
+                base.
+              </p>
 
-                <Link
-                  href="/documents"
-                  className="mt-4 inline-block text-xs font-medium text-blue-600 hover:text-blue-700"
-                >
-                  Open Documents →
-                </Link>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {documents.map((document) => {
-                  const selected =
-                    selectedDocuments.includes(
-                      document.id
-                    );
+              <Link
+                href="/upload"
+                className="mt-5 inline-block border border-blue-600 bg-blue-600 px-5 py-2.5 text-xs font-medium text-white transition hover:bg-blue-700"
+              >
+                Upload Document
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-6 space-y-2">
+              {documents.map((document) => {
+                const selected =
+                  selectedDocuments.includes(
+                    document.id
+                  );
 
-                  return (
-                    <button
-                      key={document.id}
-                      type="button"
-                      onClick={() =>
-                        toggleDocument(
-                          document.id
-                        )
-                      }
-                      className={`flex w-full items-center gap-4 p-4 text-left transition ${
-                        selected
-                          ? "bg-blue-50"
-                          : "bg-white hover:bg-slate-50"
-                      }`}
-                    >
-                      <div
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center border text-xs ${
-                          selected
-                            ? "border-blue-500 bg-blue-600 text-white"
-                            : "border-slate-200 bg-slate-50 text-slate-500"
-                        }`}
-                      >
-                        {selected ? "✓" : "DOC"}
-                      </div>
+                return (
+                  <button
+                    key={document.id}
+                    type="button"
+                    onClick={() =>
+                      toggleDocument(document.id)
+                    }
+                    className={`flex w-full items-center justify-between border p-4 text-left transition ${
+                      selected
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-slate-200 bg-white hover:border-blue-300"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-900">
+                        {document.name ||
+                          document.file_name ||
+                          "Untitled document"}
+                      </p>
 
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-slate-800">
-                          {document.name}
-                        </p>
-
-                        {document.file_name && (
+                      {document.file_name &&
+                        document.file_name !==
+                          document.name && (
                           <p className="mt-1 truncate text-xs text-slate-400">
                             {document.file_name}
                           </p>
                         )}
-                      </div>
+                    </div>
 
-                      <div
-                        className={`h-4 w-4 border ${
-                          selected
-                            ? "border-blue-600 bg-blue-600"
-                            : "border-slate-300 bg-white"
-                        }`}
-                      >
-                        {selected && (
-                          <div className="flex h-full items-center justify-center text-[9px] text-white">
-                            ✓
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    <span
+                      className={`ml-4 shrink-0 text-xs font-semibold ${
+                        selected
+                          ? "text-blue-600"
+                          : "text-slate-400"
+                      }`}
+                    >
+                      {selected
+                        ? "Selected"
+                        : "Select"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-          <div className="mt-4 text-xs text-slate-400">
-            {selectedDocuments.length} document
-            {selectedDocuments.length === 1
-              ? ""
-              : "s"} selected
-          </div>
+          {selectedDocuments.length > 0 && (
+            <p className="mt-4 text-xs text-slate-400">
+              {selectedDocuments.length} document
+              {selectedDocuments.length === 1
+                ? ""
+                : "s"} selected
+            </p>
+          )}
         </section>
       )}
 
       {error && (
-        <section className="border border-red-200 bg-red-50 p-4">
-          <p className="text-sm text-red-700">
+        <section className="border border-red-200 bg-red-50 p-5">
+          <p className="text-sm font-medium text-red-700">
+            Research error
+          </p>
+
+          <p className="mt-1 text-sm leading-6 text-red-600">
             {error}
           </p>
         </section>
       )}
 
-      <section className="border border-slate-200 bg-white p-8">
-        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-sm font-medium text-slate-900">
-              Ready to research
+      {!result && (
+        <section className="border border-slate-200 bg-white p-8">
+          <div className="flex flex-col items-center text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
+              Ready to investigate
             </p>
 
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              {selectedMode.label}
-              {" · "}
-              {depth} depth
-              {" · "}
-              {useWeb && useDocuments
-                ? "Web + private documents"
-                : useWeb
-                  ? "Web research"
-                  : "Private documents"}
+            <h2 className="mt-3 text-xl font-semibold text-slate-900">
+              Start your research
+            </h2>
+
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
+              DocChatAI will analyze your selected
+              sources and produce a structured research
+              response.
             </p>
+
+            <button
+              type="button"
+              onClick={startResearch}
+              disabled={researching}
+              className="mt-7 min-w-48 border border-blue-700 bg-blue-600 px-7 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {researching
+                ? "Researching..."
+                : "Start Research"}
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={startResearch}
-            disabled={researching}
-            className="border border-blue-700 bg-blue-600 px-8 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {researching
-              ? "Researching..."
-              : "Start Research"}
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
 
       {researching && (
-        <section className="border border-slate-200 bg-white p-8">
+        <section className="border border-blue-200 bg-blue-50 p-8">
           <div className="flex items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center border border-blue-100 bg-blue-50 text-blue-600">
-              ◎
-            </div>
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
 
             <div>
               <p className="text-sm font-medium text-slate-900">
@@ -747,180 +838,115 @@ export default function ResearchPage() {
               </p>
 
               <p className="mt-1 text-xs text-slate-500">
-                Searching, evaluating, and
-                synthesizing information...
+                DocChatAI is investigating the selected
+                sources. This may take a moment.
               </p>
             </div>
           </div>
-
-          <div className="mt-6 h-1 w-full overflow-hidden bg-slate-100">
-            <div className="h-full w-2/3 animate-pulse bg-blue-600" />
-          </div>
         </section>
       )}
 
-      {result && (
-        <section className="border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 p-8">
-            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
-                  Intelligence Report
-                </p>
+      {result && !researching && (
+        <section className="space-y-6">
+          <div className="flex flex-col justify-between gap-4 border border-slate-200 bg-white p-8 md:flex-row md:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
+                Research complete
+              </p>
 
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-                  Research Results
-                </h2>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+                Research findings
+              </h2>
 
-                <p className="mt-2 text-xs text-slate-400">
-                  {selectedMode.label}
-                  {" · "}
-                  {depth} depth
-                </p>
-              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                {selectedMode.label} ·{" "}
+                {depth.charAt(0).toUpperCase() +
+                  depth.slice(1)}{" "}
+                depth
+              </p>
+            </div>
 
-              <button
-                type="button"
-                onClick={startNewResearch}
-                className="border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 transition hover:border-blue-300 hover:text-blue-600"
-              >
-                New Research
-              </button>
+            <button
+              type="button"
+              onClick={startNewResearch}
+              className="border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-blue-300 hover:text-blue-600"
+            >
+              New Research
+            </button>
+          </div>
+
+          <div className="border border-slate-200 bg-white p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
+              Answer
+            </p>
+
+            <div className="mt-6 whitespace-pre-wrap text-sm leading-8 text-slate-700">
+              {result.answer ||
+                "No research answer was returned."}
             </div>
           </div>
 
-          <div className="p-8">
-            <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
-              {result.answer}
+          {result.sources.length > 0 && (
+            <div className="border border-slate-200 bg-white p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
+                Sources
+              </p>
+
+              <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                Research sources
+              </h3>
+
+              <div className="mt-6 space-y-3">
+                {result.sources.map(
+                  (source, index) => (
+                    <a
+                      key={`${source.url}-${index}`}
+                      href={source.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-300 hover:bg-white"
+                    >
+                      <p className="text-sm font-medium text-slate-900">
+                        {source.title ||
+                          "Research source"}
+                      </p>
+
+                      <p className="mt-1 break-all text-xs text-slate-400">
+                        {source.url}
+                      </p>
+                    </a>
+                  )
+                )}
+              </div>
             </div>
+          )}
 
-            {result.queries.length > 0 && (
-              <div className="mt-10 border-t border-slate-100 pt-7">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-                  Search queries
-                </p>
+          {result.queries.length > 0 && (
+            <div className="border border-slate-200 bg-white p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">
+                Search strategy
+              </p>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {result.queries.map(
-                    (query, index) => (
-                      <span
-                        key={`${query}-${index}`}
-                        className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500"
-                      >
-                        {query}
-                      </span>
-                    )
-                  )}
-                </div>
+              <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                Research queries
+              </h3>
+
+              <div className="mt-6 space-y-2">
+                {result.queries.map(
+                  (query, index) => (
+                    <div
+                      key={`${query}-${index}`}
+                      className="border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"
+                    >
+                      {query}
+                    </div>
+                  )
+                )}
               </div>
-            )}
-
-            {result.sources.length > 0 && (
-              <div className="mt-10 border-t border-slate-100 pt-7">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-                    Research Sources
-                  </p>
-
-                  <span className="text-xs text-slate-400">
-                    {result.sources.length} source
-                    {result.sources.length === 1
-                      ? ""
-                      : "s"}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  {result.sources.map(
-                    (source, index) => (
-                      <a
-                        key={`${source.url}-${index}`}
-                        href={source.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50/30"
-                      >
-                        <div className="flex gap-3">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-blue-100 bg-blue-50 text-xs font-semibold text-blue-600">
-                            {String(
-                              index + 1
-                            ).padStart(2, "0")}
-                          </div>
-
-                          <div className="min-w-0">
-                            <p className="line-clamp-2 text-sm font-medium text-slate-800">
-                              {source.title}
-                            </p>
-
-                            <p className="mt-2 truncate text-xs text-slate-400">
-                              {source.url}
-                            </p>
-                          </div>
-                        </div>
-                      </a>
-                    )
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </section>
       )}
     </div>
-  );
-}
-
-function SourceCard({
-  title,
-  description,
-  selected,
-  disabled = false,
-  onClick,
-}: {
-  title: string;
-  description: string;
-  selected: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full border p-5 text-left transition ${
-        disabled
-          ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"
-          : selected
-            ? "border-blue-500 bg-blue-50"
-            : "border-slate-200 bg-white hover:border-blue-300"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-medium text-slate-900">
-          {title}
-        </p>
-
-        {disabled ? (
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Coming soon
-          </span>
-        ) : (
-          <span
-            className={`flex h-5 w-5 items-center justify-center border text-[10px] ${
-              selected
-                ? "border-blue-600 bg-blue-600 text-white"
-                : "border-slate-300 bg-white text-transparent"
-            }`}
-          >
-            ✓
-          </span>
-        )}
-      </div>
-
-      <p className="mt-2 text-xs leading-5 text-slate-500">
-        {description}
-      </p>
-    </button>
   );
 }

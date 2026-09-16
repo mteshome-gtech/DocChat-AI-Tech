@@ -3,6 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
+
 import {
   ChangeEvent,
   useEffect,
@@ -10,11 +11,13 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { createClient } from "@/lib/supabase/client";
 import { hasFeature, type Plan } from "@/lib/plans";
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://127.0.0.1:8000";
 
 type AnalyzeType = {
   id: string;
@@ -167,75 +170,113 @@ export default function AnalyzePage() {
 
   const [plan, setPlan] = useState<Plan>("free");
   const [loading, setLoading] = useState(true);
+
   const [analysisId, setAnalysisId] =
     useState("executive_summary");
-  const [analysisOpen, setAnalysisOpen] = useState(false);
+
+  const [analysisOpen, setAnalysisOpen] =
+    useState(false);
+
   const [search, setSearch] = useState("");
+
   const [document, setDocument] = useState("");
+
   const [uploadedDocuments, setUploadedDocuments] =
     useState<UploadedDocument[]>([]);
+
   const [savedDocuments, setSavedDocuments] =
     useState<SavedDocument[]>([]);
+
   const [loadingDocuments, setLoadingDocuments] =
     useState(true);
+
   const [selectedDocumentId, setSelectedDocumentId] =
     useState("");
-  const [analyzing, setAnalyzing] = useState(false);
+
+  const [analyzing, setAnalyzing] =
+    useState(false);
+
   const [result, setResult] = useState("");
+
   const [error, setError] = useState("");
-  const [customPrompt, setCustomPrompt] = useState("");
+
+  const [customPrompt, setCustomPrompt] =
+    useState("");
 
   useEffect(() => {
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      if (!user) {
-        setLoading(false);
-        setLoadingDocuments(false);
-        return;
-      }
+        if (!user) {
+          setLoading(false);
+          setLoadingDocuments(false);
+          return;
+        }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("plan")
-        .eq("id", user.id)
-        .single();
+        const {
+          data: profile,
+          error: profileError,
+        } = await supabase
+          .from("profiles")
+          .select("plan")
+          .eq("id", user.id)
+          .single();
 
-      const userPlan: Plan =
-        profile?.plan === "pro" ? "pro" : "free";
+        if (profileError) {
+          console.error(
+            "Profile loading error:",
+            profileError
+          );
+        }
 
-      setPlan(userPlan);
+        const userPlan: Plan =
+          profile?.plan === "pro" ? "pro" : "free";
 
-      const {
-        data: documentsData,
-        error: documentsError,
-      } = await supabase
-        .from("documents")
-        .select(
-          "id, name, file_name, file_type, file_size, status, created_at"
-        )
-        .eq("user_id", user.id)
-        .order("created_at", {
-          ascending: false,
-        });
+        setPlan(userPlan);
 
-      if (documentsError) {
+        const {
+          data: documentsData,
+          error: documentsError,
+        } = await supabase
+          .from("documents")
+          .select(
+            "id, name, file_name, file_type, file_size, status, created_at"
+          )
+          .eq("user_id", user.id)
+          .order("created_at", {
+            ascending: false,
+          });
+
+        if (documentsError) {
+          console.error(
+            "Documents loading error:",
+            documentsError
+          );
+
+          setError(
+            "Unable to load your saved documents."
+          );
+        } else {
+          setSavedDocuments(
+            documentsData || []
+          );
+        }
+      } catch (err) {
         console.error(
-          "Documents loading error:",
-          documentsError
+          "Analyze workspace loading error:",
+          err
         );
 
         setError(
-          "Unable to load your saved documents."
+          "Unable to load the Analyze workspace."
         );
-      } else {
-        setSavedDocuments(documentsData || []);
+      } finally {
+        setLoading(false);
+        setLoadingDocuments(false);
       }
-
-      setLoading(false);
-      setLoadingDocuments(false);
     }
 
     load();
@@ -255,7 +296,9 @@ export default function AnalyzePage() {
 
     return ANALYSIS_TYPES.filter(
       (item) =>
-        item.name.toLowerCase().includes(query) ||
+        item.name
+          .toLowerCase()
+          .includes(query) ||
         item.description
           .toLowerCase()
           .includes(query) ||
@@ -327,7 +370,9 @@ export default function AnalyzePage() {
       event.target.files || []
     );
 
-    if (!files.length) return;
+    if (!files.length) {
+      return;
+    }
 
     setError("");
     setSelectedDocumentId("");
@@ -403,30 +448,57 @@ export default function AnalyzePage() {
         );
       }
 
-      /*
-       * IMPORTANT:
-       * This is the saved-document preview endpoint.
-       * We are only changing the API host here.
-       * We are NOT changing /upload/.../preview to /api/upload/...
-       * until that backend route is confirmed.
-       */
-      const response = await fetch(
-        `${API_URL}/upload/${documentId}/preview`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
-      );
+      let response: Response;
 
-      if (!response.ok) {
+      try {
+        response = await fetch(
+          `${API_URL}/upload/${documentId}/preview`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }
+        );
+      } catch (networkError) {
+        console.error(
+          "Document preview network error:",
+          networkError
+        );
+
         throw new Error(
-          "Unable to retrieve the selected document."
+          `Unable to reach the DocChatAI API at ${API_URL}. Please verify your API URL and backend deployment.`
         );
       }
 
-      const previewData = await response.json();
+      if (!response.ok) {
+        let detail = "";
+
+        try {
+          const errorData =
+            await response.json();
+
+          detail =
+            errorData?.detail ||
+            errorData?.message ||
+            "";
+        } catch {
+          try {
+            detail =
+              await response.text();
+          } catch {
+            detail = "";
+          }
+        }
+
+        throw new Error(
+          detail ||
+            `Unable to retrieve the selected document. Server returned ${response.status}.`
+        );
+      }
+
+      const previewData =
+        await response.json();
 
       if (!previewData?.url) {
         throw new Error(
@@ -434,16 +506,31 @@ export default function AnalyzePage() {
         );
       }
 
-      const fileResponse =
-        await fetch(previewData.url);
+      let fileResponse: Response;
 
-      if (!fileResponse.ok) {
+      try {
+        fileResponse = await fetch(
+          previewData.url
+        );
+      } catch (networkError) {
+        console.error(
+          "Document download network error:",
+          networkError
+        );
+
         throw new Error(
           "Unable to download the selected document."
         );
       }
 
-      const blob = await fileResponse.blob();
+      if (!fileResponse.ok) {
+        throw new Error(
+          `Unable to download the selected document. Server returned ${fileResponse.status}.`
+        );
+      }
+
+      const blob =
+        await fileResponse.blob();
 
       const file = new File(
         [blob],
@@ -532,27 +619,6 @@ export default function AnalyzePage() {
     setAnalyzing(true);
 
     try {
-      const formData = new FormData();
-
-      formData.append(
-        "analysis_type",
-        selectedAnalysis.id
-      );
-
-      if (selectedAnalysis.id === "custom") {
-        formData.append(
-          "custom_prompt",
-          customPrompt
-        );
-      }
-
-      uploadedDocuments.forEach((document) => {
-        formData.append(
-          "files",
-          document.file
-        );
-      });
-
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -563,37 +629,99 @@ export default function AnalyzePage() {
         );
       }
 
-      /*
-       * PRODUCTION FIX:
-       * Use the configured API URL instead of localhost.
-       */
-      const response = await fetch(
-        `${API_URL}/api/analyze`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: formData,
-        }
+      const formData = new FormData();
+
+      formData.append(
+        "analysis_type",
+        selectedAnalysis.id
       );
 
-      if (!response.ok) {
-        const message =
-          await response.text();
-
-        throw new Error(
-          message || "Analysis failed."
+      if (selectedAnalysis.id === "custom") {
+        formData.append(
+          "custom_prompt",
+          customPrompt.trim()
         );
       }
 
-      const data = await response.json();
-
-      setResult(
-        data.result ||
-          data.analysis ||
-          "Analysis completed successfully."
+      uploadedDocuments.forEach(
+        (uploadedDocument) => {
+          formData.append(
+            "files",
+            uploadedDocument.file
+          );
+        }
       );
+
+      let response: Response;
+
+      try {
+        response = await fetch(
+          `${API_URL}/api/analyze`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: formData,
+          }
+        );
+      } catch (networkError) {
+        console.error(
+          "Analyze network error:",
+          networkError
+        );
+
+        throw new Error(
+          `Unable to reach the DocChatAI API at ${API_URL}. Check your Vercel API URL, Render deployment, and CORS configuration.`
+        );
+      }
+
+      let responseData: {
+        result?: string;
+        analysis?: string;
+        detail?: string;
+        message?: string;
+      } = {};
+
+      let rawResponse = "";
+
+      try {
+        rawResponse =
+          await response.text();
+
+        if (rawResponse) {
+          try {
+            responseData =
+              JSON.parse(rawResponse);
+          } catch {
+            // Server returned plain text.
+          }
+        }
+      } catch {
+        rawResponse = "";
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          responseData.detail ||
+            responseData.message ||
+            rawResponse ||
+            `Analysis failed with server status ${response.status}.`
+        );
+      }
+
+      const analysisResult =
+        responseData.result ||
+        responseData.analysis ||
+        rawResponse;
+
+      if (!analysisResult) {
+        throw new Error(
+          "The analysis completed, but the server returned no result."
+        );
+      }
+
+      setResult(analysisResult);
     } catch (err) {
       console.error(
         "Analyze error:",
@@ -871,7 +999,8 @@ export default function AnalyzePage() {
               </p>
 
               <p className="mt-1 text-xs text-slate-500">
-                PDF, DOCX, or TXT · Multiple files supported
+                PDF, DOCX, or TXT · Multiple files
+                supported
               </p>
 
               <input
@@ -895,7 +1024,8 @@ export default function AnalyzePage() {
 
                 <p className="text-xs text-slate-400">
                   {uploadedDocuments.length}{" "}
-                  {uploadedDocuments.length === 1
+                  {uploadedDocuments.length ===
+                  1
                     ? "document"
                     : "documents"}
                 </p>
@@ -1041,7 +1171,8 @@ export default function AnalyzePage() {
               </p>
 
               <p className="mt-2 text-xs text-slate-400">
-                Select an analysis type and document to get started.
+                Select an analysis type and document
+                to get started.
               </p>
             </div>
           )}
@@ -1069,7 +1200,8 @@ export default function AnalyzePage() {
 
                   <div className="px-4 py-4">
                     <p className="text-xs text-slate-500">
-                      Reading document structure and extracting insights...
+                      Reading document structure and
+                      extracting insights...
                     </p>
                   </div>
                 </div>
@@ -1224,26 +1356,34 @@ function Reveal({
   className?: string;
   delay?: number;
 }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(
+    null
+  );
+
+  const [visible, setVisible] =
+    useState(false);
 
   useEffect(() => {
     const element = ref.current;
 
-    if (!element) return;
+    if (!element) {
+      return;
+    }
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.unobserve(element);
+    const observer =
+      new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setVisible(true);
+            observer.unobserve(element);
+          }
+        },
+        {
+          threshold: 0.12,
+          rootMargin:
+            "0px 0px -60px 0px",
         }
-      },
-      {
-        threshold: 0.12,
-        rootMargin: "0px 0px -60px 0px",
-      }
-    );
+      );
 
     observer.observe(element);
 
