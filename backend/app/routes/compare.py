@@ -12,49 +12,68 @@ from google.genai import types
 
 from app.routes.upload import get_authenticated_user
 
+
 load_dotenv()
+
 
 router = APIRouter(
     prefix="/compare",
     tags=["Compare"],
 )
 
+
+# ---------------------------------------------------------
+# Environment
+# ---------------------------------------------------------
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
+
 SUPABASE_SERVICE_ROLE_KEY = os.getenv(
     "SUPABASE_SERVICE_ROLE_KEY"
 )
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv(
+    "GEMINI_API_KEY"
+)
 
 GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
-    "gemini-3.8-flash",
+    "gemini-3.7-flash",
 )
+
 
 if not SUPABASE_URL:
     raise RuntimeError(
         "SUPABASE_URL is not configured."
     )
 
+
 if not SUPABASE_SERVICE_ROLE_KEY:
     raise RuntimeError(
         "SUPABASE_SERVICE_ROLE_KEY is not configured."
     )
+
 
 if not GEMINI_API_KEY:
     raise RuntimeError(
         "GEMINI_API_KEY is not configured."
     )
 
+
 supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
 )
 
+
 gemini_client = genai.Client(
     api_key=GEMINI_API_KEY
 )
 
+
+# ---------------------------------------------------------
+# Request model
+# ---------------------------------------------------------
 
 class CompareRequest(BaseModel):
     document_a_id: str = Field(
@@ -70,11 +89,16 @@ class CompareRequest(BaseModel):
     depth: str = "standard"
 
 
+# ---------------------------------------------------------
+# Validation
+# ---------------------------------------------------------
+
 VALID_COMPARE_TYPES = {
     "full",
     "changes",
     "similarities",
 }
+
 
 VALID_DEPTHS = {
     "quick",
@@ -82,6 +106,10 @@ VALID_DEPTHS = {
     "deep",
 }
 
+
+# ---------------------------------------------------------
+# Comparison instructions
+# ---------------------------------------------------------
 
 COMPARE_TYPE_INSTRUCTIONS = {
     "full": """
@@ -151,28 +179,46 @@ contradictions, and important areas of agreement.
 }
 
 
+# ---------------------------------------------------------
+# Load document
+# ---------------------------------------------------------
+
 def load_document(
     user_id: str,
     document_id: str,
 ) -> dict[str, Any]:
 
-    document_result = (
-        supabase
-        .table("documents")
-        .select(
-            "id, name, file_name"
+    try:
+        document_result = (
+            supabase
+            .table("documents")
+            .select(
+                "id, name, file_name"
+            )
+            .eq(
+                "id",
+                document_id,
+            )
+            .eq(
+                "user_id",
+                user_id,
+            )
+            .single()
+            .execute()
         )
-        .eq(
-            "id",
-            document_id,
+
+    except Exception as error:
+        print(
+            "Compare document lookup error:",
+            repr(error),
         )
-        .eq(
-            "user_id",
-            user_id,
-        )
-        .single()
-        .execute()
-    )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to retrieve the selected document."
+            ),
+        ) from error
 
     document = document_result.data
 
@@ -182,22 +228,36 @@ def load_document(
             detail="Document not found.",
         )
 
-    chunks_result = (
-        supabase
-        .table("document_chunks")
-        .select(
-            "chunk_index, content"
+    try:
+        chunks_result = (
+            supabase
+            .table("document_chunks")
+            .select(
+                "chunk_index, content"
+            )
+            .eq(
+                "document_id",
+                document_id,
+            )
+            .order(
+                "chunk_index",
+                desc=False,
+            )
+            .execute()
         )
-        .eq(
-            "document_id",
-            document_id,
+
+    except Exception as error:
+        print(
+            "Compare document chunks error:",
+            repr(error),
         )
-        .order(
-            "chunk_index",
-            desc=False,
-        )
-        .execute()
-    )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to retrieve the document content."
+            ),
+        ) from error
 
     chunks = chunks_result.data or []
 
@@ -218,7 +278,7 @@ def load_document(
         content_parts
     )
 
-    if not content:
+    if not content.strip():
         raise HTTPException(
             status_code=400,
             detail=(
@@ -228,15 +288,23 @@ def load_document(
         )
 
     return {
-        "id": str(document["id"]),
+        "id": str(
+            document["id"]
+        ),
+
         "name": (
             document.get("name")
             or document.get("file_name")
             or "Untitled document"
         ),
+
         "content": content,
     }
 
+
+# ---------------------------------------------------------
+# Prompt
+# ---------------------------------------------------------
 
 def build_compare_prompt(
     document_a: dict[str, Any],
@@ -245,14 +313,18 @@ def build_compare_prompt(
     depth: str,
 ) -> str:
 
-    type_instructions = COMPARE_TYPE_INSTRUCTIONS.get(
-        compare_type,
-        COMPARE_TYPE_INSTRUCTIONS["full"],
+    type_instructions = (
+        COMPARE_TYPE_INSTRUCTIONS.get(
+            compare_type,
+            COMPARE_TYPE_INSTRUCTIONS["full"],
+        )
     )
 
-    depth_instructions = DEPTH_INSTRUCTIONS.get(
-        depth,
-        DEPTH_INSTRUCTIONS["standard"],
+    depth_instructions = (
+        DEPTH_INSTRUCTIONS.get(
+            depth,
+            DEPTH_INSTRUCTIONS["standard"],
+        )
     )
 
     return f"""
@@ -353,40 +425,67 @@ Do not wrap the JSON in code fences.
 """
 
 
+# ---------------------------------------------------------
+# JSON extraction
+# ---------------------------------------------------------
+
 def extract_json(
     text: str,
 ) -> dict[str, Any]:
 
     cleaned = text.strip()
 
+    if not cleaned:
+        raise RuntimeError(
+            "Comparison AI returned an empty response."
+        )
+
     if cleaned.startswith("```"):
         lines = cleaned.splitlines()
 
-        if lines and lines[0].startswith("```"):
+        if (
+            lines
+            and lines[0].strip().startswith("```")
+        ):
             lines = lines[1:]
 
-        if lines and lines[-1].strip() == "```":
+        if (
+            lines
+            and lines[-1].strip() == "```"
+        ):
             lines = lines[:-1]
 
-        cleaned = "\n".join(lines).strip()
+        cleaned = "\n".join(
+            lines
+        ).strip()
 
         if cleaned.lower().startswith("json"):
             cleaned = cleaned[4:].strip()
 
     try:
-        result = json.loads(cleaned)
+        result = json.loads(
+            cleaned
+        )
 
     except json.JSONDecodeError as error:
         print(
             "Compare JSON parsing error:",
-            error,
+            repr(error),
+        )
+
+        print(
+            "Compare raw Gemini response:",
+            cleaned[:5000],
         )
 
         raise RuntimeError(
             "Comparison AI returned invalid JSON."
         ) from error
 
-    if not isinstance(result, dict):
+    if not isinstance(
+        result,
+        dict,
+    ):
         raise RuntimeError(
             "Comparison AI returned an invalid result."
         )
@@ -394,18 +493,36 @@ def extract_json(
     return result
 
 
+# ---------------------------------------------------------
+# Result cleanup
+# ---------------------------------------------------------
+
 def clean_list(
     value: Any,
 ) -> list[str]:
 
-    if not isinstance(value, list):
+    if not isinstance(
+        value,
+        list,
+    ):
         return []
 
-    return [
-        str(item).strip()
-        for item in value
-        if str(item).strip()
-    ]
+    cleaned: list[str] = []
+
+    for item in value:
+        if item is None:
+            continue
+
+        text = str(
+            item
+        ).strip()
+
+        if text:
+            cleaned.append(
+                text
+            )
+
+    return cleaned
 
 
 def normalize_result(
@@ -417,25 +534,38 @@ def normalize_result(
         "",
     )
 
-    if not isinstance(summary, str):
-        summary = str(summary)
+    if not isinstance(
+        summary,
+        str,
+    ):
+        summary = str(
+            summary
+        )
 
     return {
         "summary": summary.strip(),
+
         "added": clean_list(
             result.get("added")
         ),
+
         "removed": clean_list(
             result.get("removed")
         ),
+
         "modified": clean_list(
             result.get("modified")
         ),
+
         "similarities": clean_list(
             result.get("similarities")
         ),
     }
 
+
+# ---------------------------------------------------------
+# Gemini comparison
+# ---------------------------------------------------------
 
 def generate_comparison(
     document_a: dict[str, Any],
@@ -457,14 +587,19 @@ def generate_comparison(
     )
 
     response = None
-    last_error = None
+    last_error: Exception | None = None
 
-    for attempt in range(4):
+    max_attempts = 4
+
+    for attempt in range(
+        max_attempts
+    ):
 
         try:
             print(
-                "Compare Gemini attempt "
-                f"{attempt + 1}/4..."
+                "Compare Gemini request "
+                f"{attempt + 1}/{max_attempts} "
+                f"using model {GEMINI_MODEL}..."
             )
 
             response = (
@@ -477,48 +612,76 @@ def generate_comparison(
                 )
             )
 
+            print(
+                "Compare Gemini request succeeded."
+            )
+
             break
 
         except Exception as error:
 
             last_error = error
 
-            error_text = str(error)
+            error_text = str(
+                error
+            )
+
+            error_upper = error_text.upper()
+
+            print(
+                "Compare Gemini error:",
+                repr(error),
+            )
 
             retryable = (
                 "429" in error_text
                 or "RESOURCE_EXHAUSTED"
-                in error_text
+                in error_upper
                 or "503" in error_text
-                or "UNAVAILABLE" in error_text
+                or "UNAVAILABLE"
+                in error_upper
                 or "500" in error_text
+                or "INTERNAL" in error_upper
+                or "DEADLINE" in error_upper
+                or "TIMEOUT" in error_upper
             )
 
             if (
                 not retryable
-                or attempt == 3
+                or attempt == max_attempts - 1
             ):
-                print(
-                    "Compare Gemini error:",
-                    error,
-                )
+                break
 
-                raise RuntimeError(
-                    "Comparison AI service failed."
-                ) from error
-
-            delay = 2 ** attempt
+            delay = min(
+                2 ** attempt,
+                8,
+            )
 
             print(
-                "Comparison service temporarily "
+                "Comparison Gemini service temporarily "
                 f"unavailable. Retrying in {delay}s."
             )
 
-            time.sleep(delay)
+            time.sleep(
+                delay
+            )
 
     if response is None:
+
+        diagnostic = (
+            str(last_error)
+            if last_error
+            else "Unknown Gemini error."
+        )
+
+        print(
+            "Compare Gemini final failure:",
+            diagnostic,
+        )
+
         raise RuntimeError(
-            f"Comparison failed: {last_error}"
+            "Comparison AI service failed. "
+            f"Gemini response: {diagnostic}"
         )
 
     text = getattr(
@@ -528,14 +691,27 @@ def generate_comparison(
     ) or ""
 
     if not text.strip():
-        raise RuntimeError(
-            "Comparison returned an empty response."
+
+        print(
+            "Compare Gemini returned no text."
         )
 
-    result = extract_json(text)
+        raise RuntimeError(
+            "Comparison AI returned an empty response."
+        )
 
-    return normalize_result(result)
+    result = extract_json(
+        text
+    )
 
+    return normalize_result(
+        result
+    )
+
+
+# ---------------------------------------------------------
+# Compare endpoint
+# ---------------------------------------------------------
 
 @router.post("")
 async def compare(
@@ -544,9 +720,33 @@ async def compare(
         default=None
     ),
 ):
-    user = get_authenticated_user(
-        authorization
-    )
+    # -----------------------------------------------------
+    # Authentication
+    # -----------------------------------------------------
+
+    try:
+        user = get_authenticated_user(
+            authorization
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        print(
+            "Compare authentication error:",
+            repr(error),
+        )
+
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication failed.",
+        ) from error
+
+
+    # -----------------------------------------------------
+    # Validate document selection
+    # -----------------------------------------------------
 
     if (
         request.document_a_id
@@ -560,6 +760,11 @@ async def compare(
             ),
         )
 
+
+    # -----------------------------------------------------
+    # Validate comparison type
+    # -----------------------------------------------------
+
     if (
         request.compare_type
         not in VALID_COMPARE_TYPES
@@ -568,6 +773,11 @@ async def compare(
             status_code=400,
             detail="Invalid comparison type.",
         )
+
+
+    # -----------------------------------------------------
+    # Validate depth
+    # -----------------------------------------------------
 
     if (
         request.depth
@@ -578,27 +788,53 @@ async def compare(
             detail="Invalid comparison depth.",
         )
 
-    profile_result = (
-        supabase
-        .table("profiles")
-        .select("plan")
-        .eq(
-            "id",
-            str(user.id),
+
+    # -----------------------------------------------------
+    # Load profile
+    # -----------------------------------------------------
+
+    try:
+        profile_result = (
+            supabase
+            .table("profiles")
+            .select("plan")
+            .eq(
+                "id",
+                str(user.id),
+            )
+            .single()
+            .execute()
         )
-        .single()
-        .execute()
-    )
+
+    except Exception as error:
+        print(
+            "Compare profile lookup error:",
+            repr(error),
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to verify your account plan."
+            ),
+        ) from error
+
 
     profile = (
         profile_result.data
         or {}
     )
 
+
     plan = profile.get(
         "plan",
         "free",
     )
+
+
+    # -----------------------------------------------------
+    # Pro access
+    # -----------------------------------------------------
 
     if plan not in {
         "pro",
@@ -612,17 +848,29 @@ async def compare(
             ),
         )
 
+
+    # -----------------------------------------------------
+    # Load documents
+    # -----------------------------------------------------
+
     document_a = load_document(
         user_id=str(user.id),
         document_id=request.document_a_id,
     )
+
 
     document_b = load_document(
         user_id=str(user.id),
         document_id=request.document_b_id,
     )
 
+
+    # -----------------------------------------------------
+    # Generate comparison
+    # -----------------------------------------------------
+
     try:
+
         result = generate_comparison(
             document_a=document_a,
             document_b=document_b,
@@ -634,7 +882,7 @@ async def compare(
 
         print(
             "Compare service error:",
-            error,
+            repr(error),
         )
 
         raise HTTPException(
@@ -646,7 +894,7 @@ async def compare(
 
         print(
             "Unexpected compare error:",
-            error,
+            repr(error),
         )
 
         raise HTTPException(
@@ -657,21 +905,53 @@ async def compare(
             ),
         ) from error
 
+
+    # -----------------------------------------------------
+    # Response
+    # -----------------------------------------------------
+
     return {
         "success": True,
-        "summary": result["summary"],
-        "added": result["added"],
-        "removed": result["removed"],
-        "modified": result["modified"],
-        "similarities": result["similarities"],
+
+        "summary": result[
+            "summary"
+        ],
+
+        "added": result[
+            "added"
+        ],
+
+        "removed": result[
+            "removed"
+        ],
+
+        "modified": result[
+            "modified"
+        ],
+
+        "similarities": result[
+            "similarities"
+        ],
+
         "compare_type": request.compare_type,
+
         "depth": request.depth,
+
         "document_a": {
-            "id": document_a["id"],
-            "name": document_a["name"],
+            "id": document_a[
+                "id"
+            ],
+            "name": document_a[
+                "name"
+            ],
         },
+
         "document_b": {
-            "id": document_b["id"],
-            "name": document_b["name"],
+            "id": document_b[
+                "id"
+            ],
+            "name": document_b[
+                "name"
+            ],
         },
     }
