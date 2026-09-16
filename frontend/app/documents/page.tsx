@@ -42,6 +42,8 @@ type PreviewResponse = {
   detail?: string;
 };
 
+type FilterType = "all" | "pdf" | "document" | "spreadsheet";
+
 export default function DocumentsPage() {
   const supabase = createClient();
 
@@ -56,10 +58,8 @@ export default function DocumentsPage() {
   const [previewError, setPreviewError] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
-
-  const [filterType, setFilterType] = useState<
-    "all" | "pdf" | "document" | "spreadsheet"
-  >("all");
+  const [filterType, setFilterType] =
+    useState<FilterType>("all");
 
   const [deletingDocumentId, setDeletingDocumentId] =
     useState<string | null>(null);
@@ -416,55 +416,38 @@ export default function DocumentsPage() {
   );
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#070812] text-white">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-indigo-600/10 blur-[140px]" />
-
-        <div className="absolute right-[-180px] top-[15%] h-[600px] w-[600px] rounded-full bg-violet-600/10 blur-[160px]" />
-
-        <div className="absolute bottom-[-250px] left-[25%] h-[500px] w-[500px] rounded-full bg-blue-500/5 blur-[150px]" />
-
-        <div
-          className="absolute inset-0 opacity-[0.025]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-          }}
-        />
-      </div>
-
-      <div className="relative mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-12">
-        <header className="mb-10">
+    <main className="min-h-screen bg-[#f8f8f6] text-black">
+      <div className="mx-auto max-w-[1400px] px-6 py-8 sm:px-8 lg:px-10 lg:py-12">
+        <header className="border-b border-black/10 pb-10">
           <Link
             href="/dashboard"
-            className="group mb-8 inline-flex items-center gap-2 text-sm font-medium text-white/45 transition hover:text-white"
+            className="group inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-black/40 transition hover:text-black"
           >
             <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
             Back to Dashboard
           </Link>
 
-          <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+          <div className="mt-10 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/60 backdrop-blur-xl">
-                <Sparkles className="h-3.5 w-3.5 text-indigo-300" />
+              <div className="mb-5 flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-blue-600">
+                <Sparkles className="h-3.5 w-3.5" />
                 Your Knowledge Library
               </div>
 
-              <h1 className="text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
-                Documents
+              <h1 className="text-5xl font-medium tracking-[-0.06em] sm:text-6xl lg:text-7xl">
+                Documents.
               </h1>
 
-              <p className="mt-3 max-w-2xl text-base leading-7 text-white/45">
-                Your private collection of intelligent
-                documents, ready to analyze, explore,
-                compare, and chat with.
+              <p className="mt-5 max-w-2xl text-sm leading-7 text-black/45 sm:text-base">
+                Your private workspace for documents,
+                insights, analysis, research, translation,
+                and AI-powered conversations.
               </p>
             </div>
 
             <Link
               href="/upload"
-              className="group inline-flex w-fit items-center gap-2 rounded-2xl border border-white/10 bg-white px-5 py-3.5 text-sm font-semibold text-[#080910] shadow-[0_12px_40px_rgba(255,255,255,0.08)] transition duration-300 hover:-translate-y-0.5 hover:bg-white/90"
+              className="group inline-flex w-fit items-center gap-3 border border-black bg-black px-6 py-4 text-sm font-medium text-white transition hover:bg-black/85"
             >
               <Upload className="h-4 w-4" />
               Upload Document
@@ -474,28 +457,26 @@ export default function DocumentsPage() {
         </header>
 
         {!loading && (
-          <section className="mb-8 grid gap-4 sm:grid-cols-3">
+          <section className="grid border-x border-b border-black/10 sm:grid-cols-3">
             <StatCard
               icon={
-                <FileCheck2 className="h-5 w-5 text-indigo-300" />
+                <FileCheck2 className="h-5 w-5" />
               }
               label="Documents"
               value={documents.length.toString()}
-              iconClass="border-indigo-400/15 bg-indigo-400/10"
             />
 
             <StatCard
               icon={
-                <HardDrive className="h-5 w-5 text-violet-300" />
+                <HardDrive className="h-5 w-5" />
               }
               label="Library Size"
               value={formatFileSize(totalSize)}
-              iconClass="border-violet-400/15 bg-violet-400/10"
             />
 
             <StatCard
               icon={
-                <Clock3 className="h-5 w-5 text-blue-300" />
+                <Clock3 className="h-5 w-5" />
               }
               label="Latest Upload"
               value={
@@ -511,21 +492,20 @@ export default function DocumentsPage() {
                     )
                   : "—"
               }
-              iconClass="border-blue-400/15 bg-blue-400/10"
             />
           </section>
         )}
 
         {error && (
-          <section className="mb-6 flex items-start gap-3 rounded-2xl border border-red-400/15 bg-red-400/[0.06] p-4">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
+          <section className="mt-8 flex items-start gap-3 border border-red-500/20 bg-red-50 px-4 py-4">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
 
             <div className="flex-1">
-              <p className="text-sm font-medium text-red-200">
+              <p className="text-sm font-medium text-red-700">
                 Something went wrong
               </p>
 
-              <p className="mt-1 text-xs leading-5 text-red-200/60">
+              <p className="mt-1 text-xs leading-5 text-red-600/70">
                 {error}
               </p>
             </div>
@@ -533,7 +513,7 @@ export default function DocumentsPage() {
             <button
               type="button"
               onClick={loadDocuments}
-              className="inline-flex items-center gap-2 rounded-lg border border-red-300/10 bg-red-300/5 px-3 py-2 text-xs font-medium text-red-200 transition hover:bg-red-300/10"
+              className="inline-flex items-center gap-2 border border-red-500/20 bg-white px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-50"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Retry
@@ -542,15 +522,19 @@ export default function DocumentsPage() {
         )}
 
         {loading ? (
-          <LoadingState />
+          <div className="mt-10">
+            <LoadingState />
+          </div>
         ) : documents.length === 0 ? (
-          <EmptyState />
+          <div className="mt-10">
+            <EmptyState />
+          </div>
         ) : (
           <>
-            <section className="mb-6 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 backdrop-blur-xl sm:p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <section className="mt-10 border border-black/10 bg-white p-4 sm:p-5">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/30" />
 
                   <input
                     type="text"
@@ -559,7 +543,7 @@ export default function DocumentsPage() {
                       setSearchQuery(e.target.value)
                     }
                     placeholder="Search your documents..."
-                    className="w-full rounded-xl border border-white/[0.08] bg-white/[0.025] py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-indigo-300/30 focus:bg-white/[0.04]"
+                    className="w-full border border-black/10 bg-[#fafafa] py-3.5 pl-11 pr-4 text-sm text-black outline-none transition placeholder:text-black/25 focus:border-black"
                   />
                 </div>
 
@@ -603,14 +587,14 @@ export default function DocumentsPage() {
               </div>
             </section>
 
-            <section>
-              <div className="mb-4 flex items-center justify-between">
+            <section className="mt-10">
+              <div className="mb-5 flex items-end justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/30">
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-black/35">
                     Your Library
                   </p>
 
-                  <p className="mt-1 text-xs text-white/20">
+                  <p className="mt-2 text-sm text-black/35">
                     {filteredDocuments.length}{" "}
                     {filteredDocuments.length === 1
                       ? "document"
@@ -625,7 +609,7 @@ export default function DocumentsPage() {
                     onClick={() =>
                       setSearchQuery("")
                     }
-                    className="text-xs text-white/35 transition hover:text-white"
+                    className="text-xs uppercase tracking-[0.15em] text-black/35 transition hover:text-black"
                   >
                     Clear search
                   </button>
@@ -640,7 +624,7 @@ export default function DocumentsPage() {
                   }}
                 />
               ) : (
-                <div className="space-y-3">
+                <div className="border-t border-black/10">
                   {filteredDocuments.map(
                     (document) => (
                       <DocumentRow
@@ -654,7 +638,9 @@ export default function DocumentsPage() {
                           handlePreview(document)
                         }
                         onDelete={() =>
-                          handleDelete(document.id)
+                          handleDelete(
+                            document.id
+                          )
                         }
                         formatFileSize={
                           formatFileSize
@@ -690,26 +676,22 @@ function StatCard({
   icon,
   label,
   value,
-  iconClass,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
-  iconClass: string;
 }) {
   return (
-    <div className="group rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5 backdrop-blur-xl transition hover:border-white/[0.14] hover:bg-white/[0.05]">
-      <div
-        className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl border ${iconClass}`}
-      >
+    <div className="border-r border-black/10 p-5 last:border-r-0 sm:p-6">
+      <div className="mb-5 flex h-10 w-10 items-center justify-center border border-black/10 bg-[#fafafa] text-blue-600">
         {icon}
       </div>
 
-      <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/35">
+      <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-black/35">
         {label}
       </p>
 
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-white">
+      <p className="mt-2 text-2xl font-medium tracking-[-0.04em]">
         {value}
       </p>
     </div>
@@ -729,10 +711,10 @@ function FilterButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border px-4 py-2.5 text-xs font-medium transition ${
+      className={`border px-4 py-2.5 text-xs font-medium uppercase tracking-[0.12em] transition ${
         active
-          ? "border-indigo-300/30 bg-indigo-400/10 text-indigo-200"
-          : "border-white/[0.08] bg-white/[0.025] text-white/40 hover:border-white/[0.15] hover:text-white/70"
+          ? "border-black bg-black text-white"
+          : "border-black/10 bg-white text-black/45 hover:border-black/25 hover:text-black"
       }`}
     >
       {label}
@@ -765,10 +747,8 @@ function DocumentRow({
       ?.toLowerCase() || "";
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:border-white/[0.15] hover:bg-white/[0.055] hover:shadow-[0_20px_60px_rgba(0,0,0,0.25)] sm:p-5">
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-indigo-300 via-violet-400 to-blue-400 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="group relative border-b border-black/10 bg-white px-4 py-5 transition hover:bg-[#fafafa] sm:px-6">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-4">
           <DocumentIcon
             extension={extension}
@@ -776,19 +756,29 @@ function DocumentRow({
           />
 
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-white sm:text-[17px]">
-              {document.name}
-            </h2>
+            <div className="flex min-w-0 items-center gap-3">
+              <h2 className="truncate text-base font-medium tracking-[-0.02em] sm:text-[17px]">
+                {document.name}
+              </h2>
+
+              <span className="hidden shrink-0 border border-black/10 bg-[#fafafa] px-2 py-1 text-[9px] font-bold tracking-[0.15em] text-black/35 sm:inline">
+                {formatFileType(
+                  document.mime_type,
+                  document.file_name ||
+                    document.name
+                )}
+              </span>
+            </div>
 
             {document.file_name &&
               document.file_name !==
                 document.name && (
-                <p className="mt-1 truncate text-xs text-white/25">
+                <p className="mt-1 truncate text-xs text-black/30">
                   {document.file_name}
                 </p>
               )}
 
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-white/35">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-black/35">
               <span>
                 {new Date(
                   document.created_at
@@ -802,7 +792,7 @@ function DocumentRow({
                 )}
               </span>
 
-              <span className="h-1 w-1 rounded-full bg-white/20" />
+              <span className="h-1 w-1 rounded-full bg-black/15" />
 
               <span>
                 {formatFileSize(
@@ -810,9 +800,9 @@ function DocumentRow({
                 )}
               </span>
 
-              <span className="h-1 w-1 rounded-full bg-white/20" />
+              <span className="h-1 w-1 rounded-full bg-black/15" />
 
-              <span className="text-emerald-300/70">
+              <span className="text-emerald-600">
                 Ready for AI
               </span>
             </div>
@@ -822,9 +812,9 @@ function DocumentRow({
         <div className="flex shrink-0 items-center gap-2">
           <Link
             href={`/chat?document=${document.id}`}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-4 py-2.5 text-sm font-medium text-white/65 transition hover:border-indigo-300/25 hover:bg-indigo-400/10 hover:text-white"
+            className="inline-flex items-center justify-center gap-2 border border-black/10 bg-white px-4 py-2.5 text-sm font-medium text-black/55 transition hover:border-black hover:bg-black hover:text-white"
           >
-            <MessageSquare className="h-4 w-4 text-indigo-200" />
+            <MessageSquare className="h-4 w-4" />
 
             <span className="hidden md:inline">
               Chat
@@ -835,9 +825,9 @@ function DocumentRow({
             type="button"
             onClick={onPreview}
             disabled={deleting}
-            className="group/preview inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:border-indigo-300/25 hover:bg-indigo-400/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center justify-center gap-2 border border-black/10 bg-white px-4 py-2.5 text-sm font-medium text-black/55 transition hover:border-black hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Eye className="h-4 w-4 text-indigo-200 transition group-hover/preview:scale-110" />
+            <Eye className="h-4 w-4" />
 
             <span className="hidden md:inline">
               Preview
@@ -848,26 +838,16 @@ function DocumentRow({
             type="button"
             onClick={onDelete}
             disabled={deleting}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-white/30 transition hover:border-red-400/20 hover:bg-red-400/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-10 w-10 items-center justify-center border border-black/10 bg-white text-black/30 transition hover:border-red-500/30 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
             aria-label={`Delete ${document.name}`}
           >
             {deleting ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/10 border-t-red-300" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-black/10 border-t-red-500" />
             ) : (
               <Trash2 className="h-4 w-4" />
             )}
           </button>
         </div>
-      </div>
-
-      <div className="pointer-events-none absolute right-5 top-3 hidden lg:block">
-        <span className="rounded-md border border-white/[0.07] bg-white/[0.025] px-2 py-1 text-[9px] font-bold tracking-[0.12em] text-white/25">
-          {formatFileType(
-            document.mime_type,
-            document.file_name ||
-              document.name
-          )}
-        </span>
       </div>
     </div>
   );
@@ -885,10 +865,10 @@ function DocumentIcon({
     type?.includes("pdf")
   ) {
     return (
-      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-red-300/10 bg-red-400/[0.06] shadow-inner">
-        <FileText className="h-6 w-6 text-red-200" />
+      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center border border-red-500/15 bg-red-50">
+        <FileText className="h-6 w-6 text-red-500" />
 
-        <span className="absolute -bottom-1 -right-1 rounded-md border border-[#070812] bg-red-400/20 px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-red-200">
+        <span className="absolute -bottom-1 -right-1 border border-red-500/10 bg-white px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-red-500">
           PDF
         </span>
       </div>
@@ -896,17 +876,15 @@ function DocumentIcon({
   }
 
   if (
-    ["xls", "xlsx", "csv"].includes(
-      extension
-    ) ||
+    ["xls", "xlsx", "csv"].includes(extension) ||
     type?.includes("spreadsheet") ||
     type?.includes("excel")
   ) {
     return (
-      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-emerald-300/10 bg-emerald-400/[0.06] shadow-inner">
-        <FileSpreadsheet className="h-6 w-6 text-emerald-200" />
+      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center border border-emerald-500/15 bg-emerald-50">
+        <FileSpreadsheet className="h-6 w-6 text-emerald-600" />
 
-        <span className="absolute -bottom-1 -right-1 rounded-md border border-[#070812] bg-emerald-400/20 px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-emerald-200">
+        <span className="absolute -bottom-1 -right-1 border border-emerald-500/10 bg-white px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-emerald-600">
           XLS
         </span>
       </div>
@@ -919,29 +897,27 @@ function DocumentIcon({
     )
   ) {
     return (
-      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-violet-300/10 bg-violet-400/[0.06] shadow-inner">
-        <FileImage className="h-6 w-6 text-violet-200" />
+      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center border border-violet-500/15 bg-violet-50">
+        <FileImage className="h-6 w-6 text-violet-600" />
       </div>
     );
   }
 
   if (
-    ["zip", "rar", "7z"].includes(
-      extension
-    )
+    ["zip", "rar", "7z"].includes(extension)
   ) {
     return (
-      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-amber-300/10 bg-amber-400/[0.06] shadow-inner">
-        <FileArchive className="h-6 w-6 text-amber-200" />
+      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center border border-amber-500/15 bg-amber-50">
+        <FileArchive className="h-6 w-6 text-amber-600" />
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.09] to-white/[0.025] shadow-inner">
-      <FileText className="h-6 w-6 text-indigo-200" />
+    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center border border-blue-500/15 bg-blue-50">
+      <FileText className="h-6 w-6 text-blue-600" />
 
-      <span className="absolute -bottom-1 -right-1 rounded-md border border-[#070812] bg-indigo-400/20 px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-indigo-200">
+      <span className="absolute -bottom-1 -right-1 border border-blue-500/10 bg-white px-1.5 py-0.5 text-[8px] font-bold tracking-wide text-blue-600">
         DOC
       </span>
     </div>
@@ -950,16 +926,16 @@ function DocumentIcon({
 
 function LoadingState() {
   return (
-    <div className="rounded-3xl border border-white/[0.08] bg-white/[0.035] p-16 text-center backdrop-blur-xl">
-      <div className="relative mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/10 border-t-indigo-300" />
+    <div className="border border-black/10 bg-white p-16 text-center">
+      <div className="relative mx-auto mb-5 flex h-12 w-12 items-center justify-center border border-black/10 bg-[#fafafa]">
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-black/10 border-t-blue-600" />
       </div>
 
-      <p className="text-sm font-medium text-white/55">
+      <p className="text-sm font-medium">
         Loading your library...
       </p>
 
-      <p className="mt-2 text-xs text-white/25">
+      <p className="mt-2 text-xs text-black/35">
         Preparing your private documents
       </p>
     </div>
@@ -968,18 +944,16 @@ function LoadingState() {
 
 function EmptyState() {
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-white/[0.09] bg-white/[0.035] px-6 py-24 text-center shadow-2xl backdrop-blur-xl sm:px-10">
-      <div className="absolute left-1/2 top-0 h-40 w-80 -translate-x-1/2 rounded-full bg-indigo-500/10 blur-[100px]" />
-
-      <div className="relative mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.06] shadow-2xl">
-        <FileText className="h-9 w-9 text-indigo-200" />
+    <div className="border border-black/10 bg-white px-6 py-24 text-center sm:px-10">
+      <div className="mx-auto flex h-20 w-20 items-center justify-center border border-black/10 bg-[#fafafa]">
+        <FileText className="h-9 w-9 text-blue-600" />
       </div>
 
-      <h2 className="relative mt-7 text-2xl font-semibold tracking-tight text-white">
-        Your library is waiting
+      <h2 className="mt-7 text-3xl font-medium tracking-[-0.05em]">
+        Your library is waiting.
       </h2>
 
-      <p className="relative mx-auto mt-3 max-w-md text-sm leading-6 text-white/40">
+      <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-black/40">
         Upload your first document and turn it
         into an intelligent, searchable knowledge
         source with DocChatAI.
@@ -987,7 +961,7 @@ function EmptyState() {
 
       <Link
         href="/upload"
-        className="relative mt-8 inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-semibold text-[#080910] transition hover:bg-white/90"
+        className="mt-8 inline-flex items-center gap-3 border border-black bg-black px-6 py-4 text-sm font-medium text-white transition hover:bg-black/85"
       >
         <Upload className="h-4 w-4" />
         Upload Your First Document
@@ -1002,14 +976,14 @@ function FilteredEmptyState({
   onClear: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-white/[0.08] bg-white/[0.035] p-16 text-center backdrop-blur-xl">
-      <Search className="mx-auto h-8 w-8 text-white/20" />
+    <div className="border border-black/10 bg-white p-16 text-center">
+      <Search className="mx-auto h-8 w-8 text-black/20" />
 
-      <h3 className="mt-5 text-lg font-semibold text-white">
-        No matching documents
+      <h3 className="mt-5 text-xl font-medium">
+        No matching documents.
       </h3>
 
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/35">
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-black/40">
         Try a different search term or change
         your document filter.
       </p>
@@ -1017,7 +991,7 @@ function FilteredEmptyState({
       <button
         type="button"
         onClick={onClear}
-        className="mt-6 rounded-xl border border-white/10 bg-white/[0.05] px-5 py-2.5 text-sm font-medium text-white/60 transition hover:bg-white/[0.08] hover:text-white"
+        className="mt-6 border border-black/10 bg-white px-5 py-2.5 text-sm font-medium text-black/55 transition hover:border-black hover:text-black"
       >
         Clear Filters
       </button>
@@ -1044,33 +1018,31 @@ function PreviewModal({
   ) => string;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#02030a]/80 p-3 backdrop-blur-md sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-sm sm:p-6">
       <div
         className="absolute inset-0"
         onClick={onClose}
       />
 
-      <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-white/[0.12] bg-[#0b0d18] shadow-[0_40px_120px_rgba(0,0,0,0.65)]">
-        <div className="relative border-b border-white/[0.08] bg-white/[0.025] px-5 py-5 sm:px-7">
-          <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-indigo-300/60 to-transparent" />
-
+      <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden border border-black/10 bg-white shadow-[0_30px_100px_rgba(0,0,0,0.2)]">
+        <div className="border-b border-black/10 px-5 py-5 sm:px-7">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-indigo-300/15 bg-indigo-400/10">
-                <FileText className="h-5 w-5 text-indigo-200" />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-blue-500/15 bg-blue-50">
+                <FileText className="h-5 w-5 text-blue-600" />
               </div>
 
               <div className="min-w-0">
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-indigo-300/60">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-600">
                   Document Preview
                 </p>
 
                 <div className="flex items-center gap-2">
-                  <h2 className="truncate text-base font-semibold text-white sm:text-lg">
+                  <h2 className="truncate text-base font-medium sm:text-lg">
                     {document.name}
                   </h2>
 
-                  <span className="hidden shrink-0 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[9px] font-bold tracking-wider text-white/30 sm:inline">
+                  <span className="hidden shrink-0 border border-black/10 bg-[#fafafa] px-2 py-1 text-[9px] font-bold tracking-wider text-black/35 sm:inline">
                     {formatFileType(
                       document.mime_type,
                       document.file_name ||
@@ -1084,7 +1056,7 @@ function PreviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/45 transition hover:bg-white/[0.08] hover:text-white"
+              className="flex h-10 w-10 shrink-0 items-center justify-center border border-black/10 bg-white text-black/40 transition hover:border-black hover:text-black"
               aria-label="Close preview"
             >
               <X className="h-5 w-5" />
@@ -1095,54 +1067,50 @@ function PreviewModal({
         <div className="min-h-0 flex-1 overflow-y-auto">
           {previewLoading ? (
             <div className="flex min-h-[55vh] flex-col items-center justify-center px-6">
-              <div className="relative mb-7">
-                <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-2xl" />
-
-                <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05]">
-                  <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/10 border-t-indigo-300" />
-                </div>
+              <div className="mb-7 flex h-16 w-16 items-center justify-center border border-black/10 bg-[#fafafa]">
+                <div className="h-7 w-7 animate-spin rounded-full border-2 border-black/10 border-t-blue-600" />
               </div>
 
-              <p className="text-sm font-medium text-white/65">
+              <p className="text-sm font-medium">
                 Preparing your document...
               </p>
 
-              <p className="mt-2 text-xs text-white/30">
+              <p className="mt-2 text-xs text-black/35">
                 Loading the intelligent preview
               </p>
             </div>
           ) : previewError ? (
             <div className="flex min-h-[55vh] items-center justify-center px-6">
-              <div className="max-w-md rounded-2xl border border-red-400/15 bg-red-400/[0.05] p-7 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-red-300/10 bg-red-400/[0.06]">
-                  <AlertCircle className="h-5 w-5 text-red-300" />
+              <div className="max-w-md border border-red-500/20 bg-red-50 p-7 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center border border-red-500/10 bg-white">
+                  <AlertCircle className="h-5 w-5 text-red-500" />
                 </div>
 
-                <h3 className="mt-5 text-sm font-semibold text-red-200">
+                <h3 className="mt-5 text-sm font-semibold text-red-700">
                   Preview unavailable
                 </h3>
 
-                <p className="mt-2 text-xs leading-6 text-red-200/50">
+                <p className="mt-2 text-xs leading-6 text-red-600/60">
                   {previewError}
                 </p>
               </div>
             </div>
           ) : (
             <div className="p-5 sm:p-8">
-              <div className="rounded-2xl border border-white/[0.07] bg-[#080a12] p-5 shadow-inner sm:p-8">
+              <div className="border border-black/10 bg-[#fafafa] p-5 sm:p-8">
                 {previewText ? (
-                  <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-white/70">
+                  <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-black/70">
                     {previewText}
                   </pre>
                 ) : (
                   <div className="py-16 text-center">
-                    <FileText className="mx-auto mb-4 h-9 w-9 text-white/20" />
+                    <FileText className="mx-auto mb-4 h-9 w-9 text-black/20" />
 
-                    <p className="text-sm text-white/45">
+                    <p className="text-sm text-black/45">
                       No preview text available.
                     </p>
 
-                    <p className="mt-2 text-xs text-white/25">
+                    <p className="mt-2 text-xs text-black/30">
                       The document was loaded, but the
                       preview endpoint did not return
                       readable text.
@@ -1154,10 +1122,10 @@ function PreviewModal({
           )}
         </div>
 
-        <div className="border-t border-white/[0.08] bg-white/[0.02] px-5 py-4 sm:px-7">
+        <div className="border-t border-black/10 bg-[#fafafa] px-5 py-4 sm:px-7">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-xs text-white/30">
-              <Sparkles className="h-3.5 w-3.5 text-indigo-300/70" />
+            <div className="flex items-center gap-2 text-xs text-black/30">
+              <Sparkles className="h-3.5 w-3.5 text-blue-600" />
               Powered by DocChatAI
             </div>
 
@@ -1165,7 +1133,7 @@ function PreviewModal({
               <Link
                 href={`/chat?document=${document.id}`}
                 onClick={onClose}
-                className="inline-flex items-center gap-2 rounded-xl border border-indigo-300/15 bg-indigo-400/10 px-4 py-2 text-sm font-medium text-indigo-200 transition hover:bg-indigo-400/15"
+                className="inline-flex items-center gap-2 border border-black bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/85"
               >
                 <MessageSquare className="h-4 w-4" />
                 Chat with Document
@@ -1174,7 +1142,7 @@ function PreviewModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-sm font-medium text-white/65 transition hover:bg-white/[0.09] hover:text-white"
+                className="border border-black/10 bg-white px-4 py-2 text-sm font-medium text-black/55 transition hover:border-black hover:text-black"
               >
                 Close
               </button>
