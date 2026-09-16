@@ -10,9 +10,11 @@ import {
   useRef,
   useState,
 } from "react";
-
 import { createClient } from "@/lib/supabase/client";
 import { hasFeature, type Plan } from "@/lib/plans";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 type AnalyzeType = {
   id: string;
@@ -165,38 +167,23 @@ export default function AnalyzePage() {
 
   const [plan, setPlan] = useState<Plan>("free");
   const [loading, setLoading] = useState(true);
-
   const [analysisId, setAnalysisId] =
     useState("executive_summary");
-
-  const [analysisOpen, setAnalysisOpen] =
-    useState(false);
-
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const [search, setSearch] = useState("");
-
   const [document, setDocument] = useState("");
-
   const [uploadedDocuments, setUploadedDocuments] =
     useState<UploadedDocument[]>([]);
-
   const [savedDocuments, setSavedDocuments] =
     useState<SavedDocument[]>([]);
-
   const [loadingDocuments, setLoadingDocuments] =
     useState(true);
-
   const [selectedDocumentId, setSelectedDocumentId] =
     useState("");
-
-  const [analyzing, setAnalyzing] =
-    useState(false);
-
+  const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState("");
-
   const [error, setError] = useState("");
-
-  const [customPrompt, setCustomPrompt] =
-    useState("");
+  const [customPrompt, setCustomPrompt] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -416,8 +403,15 @@ export default function AnalyzePage() {
         );
       }
 
+      /*
+       * IMPORTANT:
+       * This is the saved-document preview endpoint.
+       * We are only changing the API host here.
+       * We are NOT changing /upload/.../preview to /api/upload/...
+       * until that backend route is confirmed.
+       */
       const response = await fetch(
-        `http://127.0.0.1:8000/upload/${documentId}/preview`,
+        `${API_URL}/upload/${documentId}/preview`,
         {
           method: "GET",
           headers: {
@@ -432,8 +426,7 @@ export default function AnalyzePage() {
         );
       }
 
-      const previewData =
-        await response.json();
+      const previewData = await response.json();
 
       if (!previewData?.url) {
         throw new Error(
@@ -450,8 +443,7 @@ export default function AnalyzePage() {
         );
       }
 
-      const blob =
-        await fileResponse.blob();
+      const blob = await fileResponse.blob();
 
       const file = new File(
         [blob],
@@ -571,8 +563,12 @@ export default function AnalyzePage() {
         );
       }
 
+      /*
+       * PRODUCTION FIX:
+       * Use the configured API URL instead of localhost.
+       */
       const response = await fetch(
-        "http://127.0.0.1:8000/api/analyze",
+        `${API_URL}/api/analyze`,
         {
           method: "POST",
           headers: {
@@ -619,9 +615,10 @@ export default function AnalyzePage() {
       <Link
         href="/dashboard"
         className="mb-2 inline-block text-sm text-slate-500 hover:text-slate-900"
-        >
-           ← Back to Dashboard
+      >
+        ← Back to Dashboard
       </Link>
+
       <Reveal>
         <Header
           eyebrow="AI Tools"
@@ -630,10 +627,8 @@ export default function AnalyzePage() {
         />
       </Reveal>
 
-      {/* Analysis Workspace */}
       <Reveal delay={100}>
         <section className="border border-slate-200 bg-white p-8">
-          {/* Analysis Selector */}
           <div>
             <p className="text-sm font-medium text-slate-900">
               Analysis
@@ -740,7 +735,9 @@ export default function AnalyzePage() {
                                       </p>
 
                                       <p className="mt-1 text-xs leading-5 text-slate-500">
-                                        {item.description}
+                                        {
+                                          item.description
+                                        }
                                       </p>
                                     </div>
 
@@ -769,7 +766,6 @@ export default function AnalyzePage() {
               )}
             </div>
 
-            {/* Quick Switcher */}
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium text-slate-400">
                 Quick analyses
@@ -808,7 +804,6 @@ export default function AnalyzePage() {
             </div>
           </div>
 
-          {/* Documents */}
           <div className="mt-10">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-slate-900">
@@ -830,7 +825,6 @@ export default function AnalyzePage() {
               </label>
             </div>
 
-            {/* Existing Documents */}
             <select
               value={selectedDocumentId}
               onChange={(e) =>
@@ -867,7 +861,6 @@ export default function AnalyzePage() {
               )}
             </select>
 
-            {/* Upload Area */}
             <label className="mt-4 flex cursor-pointer flex-col items-center justify-center border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center transition hover:border-blue-400 hover:bg-blue-50">
               <div className="flex h-11 w-11 items-center justify-center border border-slate-200 bg-white text-lg text-blue-600">
                 ↑
@@ -893,7 +886,6 @@ export default function AnalyzePage() {
             </label>
           </div>
 
-          {/* Selected Documents */}
           {uploadedDocuments.length > 0 && (
             <div className="mt-8">
               <div className="flex items-center justify-between">
@@ -958,7 +950,6 @@ export default function AnalyzePage() {
             </div>
           )}
 
-          {/* Custom Analysis */}
           {selectedAnalysis.id ===
             "custom" && (
             <div className="mt-8">
@@ -980,14 +971,12 @@ export default function AnalyzePage() {
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="mt-6 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          {/* Analyze */}
           <div className="mt-8 flex items-center justify-between border-t border-slate-200 pt-6">
             <div>
               <p className="text-xs text-slate-400">
@@ -1013,7 +1002,6 @@ export default function AnalyzePage() {
         </section>
       </Reveal>
 
-      {/* Results */}
       <Reveal delay={150}>
         <section className="border border-slate-200 bg-white p-8">
           <div className="flex items-start justify-between border-b border-slate-200 pb-6">
@@ -1042,7 +1030,6 @@ export default function AnalyzePage() {
             )}
           </div>
 
-          {/* Empty State */}
           {!result && !analyzing && (
             <div className="mt-6 border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center border border-slate-200 bg-white text-blue-600">
@@ -1059,7 +1046,6 @@ export default function AnalyzePage() {
             </div>
           )}
 
-          {/* Analyzing State */}
           {analyzing && (
             <div className="mt-6">
               <div className="border border-slate-200 bg-slate-50 p-8">
@@ -1091,7 +1077,6 @@ export default function AnalyzePage() {
             </div>
           )}
 
-          {/* Result */}
           {result && (
             <Reveal className="mt-6">
               <div className="border border-slate-200 bg-slate-50 p-6">
@@ -1230,10 +1215,6 @@ export default function AnalyzePage() {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Reveal Animation                                                           */
-/* -------------------------------------------------------------------------- */
-
 function Reveal({
   children,
   className = "",
@@ -1286,10 +1267,6 @@ function Reveal({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Header                                                                     */
-/* -------------------------------------------------------------------------- */
-
 function Header({
   eyebrow,
   title,
@@ -1315,10 +1292,6 @@ function Header({
     </section>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/* Upgrade State                                                              */
-/* -------------------------------------------------------------------------- */
 
 function UpgradeState({
   title,
@@ -1358,10 +1331,6 @@ function UpgradeState({
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/* Loading                                                                     */
-/* -------------------------------------------------------------------------- */
 
 function PageLoading() {
   return (

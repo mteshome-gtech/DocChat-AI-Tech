@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -23,11 +22,13 @@ export default function Upload() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedDocument, setUploadedDocument] =
     useState<UploadedDocument | null>(null);
-
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   const handleFile = (file: File) => {
     setError("");
@@ -78,19 +79,15 @@ export default function Upload() {
       }
 
       const formData = new FormData();
-
       formData.append("file", selectedFile);
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/upload/`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: formData,
-        }
-      );
+      const response = await fetch(`${API_URL}/api/upload`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: formData,
+      });
 
       const data = await response.json();
 
@@ -143,12 +140,11 @@ export default function Upload() {
 
   return (
     <div className="space-y-10">
-
       <Link
         href="/dashboard"
         className="mb-2 inline-block text-sm text-slate-500 hover:text-slate-900"
-        >
-           ← Back to Dashboard
+      >
+        ← Back to Dashboard
       </Link>
 
       {/* Header */}
@@ -288,7 +284,9 @@ export default function Upload() {
             onClick={handleUpload}
             className="border border-blue-700 bg-blue-600 px-8 py-4 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isUploading ? "Uploading & Analyzing..." : "Upload & Analyze"}
+            {isUploading
+              ? "Uploading & Analyzing..."
+              : "Upload & Analyze"}
           </button>
         </div>
       </section>
