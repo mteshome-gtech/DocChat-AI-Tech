@@ -1,11 +1,8 @@
 import os
-
 from datetime import datetime, timezone
 
 import stripe
-
 from fastapi import APIRouter, HTTPException, Request
-
 from supabase import create_client, Client
 
 
@@ -20,25 +17,18 @@ router = APIRouter(
 # =========================================================
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+STRIPE_PRO_PRICE_ID = os.getenv("STRIPE_PRO_PRICE_ID")
 
-STRIPE_WEBHOOK_SECRET = os.getenv(
-    "STRIPE_WEBHOOK_SECRET"
-)
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 
-STRIPE_PRO_PRICE_ID = os.getenv(
-    "STRIPE_PRO_PRICE_ID"
-)
+if not FRONTEND_URL:
+    raise RuntimeError("FRONTEND_URL is not configured.")
 
-FRONTEND_URL = os.getenv(
-    "FRONTEND_URL",
-    "http://localhost:3000",
-)
+FRONTEND_URL = FRONTEND_URL.rstrip("/")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-
-SUPABASE_SERVICE_ROLE_KEY = os.getenv(
-    "SUPABASE_SERVICE_ROLE_KEY"
-)
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 
 if STRIPE_SECRET_KEY:
@@ -50,10 +40,7 @@ if STRIPE_SECRET_KEY:
 # =========================================================
 
 def get_supabase() -> Client:
-    if (
-        not SUPABASE_URL
-        or not SUPABASE_SERVICE_ROLE_KEY
-    ):
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
         raise RuntimeError(
             "Supabase environment variables are missing."
         )
@@ -73,10 +60,6 @@ def get_stripe_metadata_value(
     key,
     default=None,
 ):
-    """
-    Safely retrieve metadata from a StripeObject.
-    """
-
     metadata = getattr(
         stripe_object,
         "metadata",
@@ -97,15 +80,6 @@ def get_stripe_metadata_value(
 
 
 def get_period_end_timestamp(subscription):
-    """
-    Get the current billing period end timestamp.
-
-    Stripe subscription objects can expose billing-period
-    information through their subscription items, so we
-    check both the subscription itself and its first item.
-    """
-
-    # First try the subscription itself.
     period_end = getattr(
         subscription,
         "current_period_end",
@@ -115,7 +89,6 @@ def get_period_end_timestamp(subscription):
     if period_end:
         return period_end
 
-    # Then check subscription items.
     items = getattr(
         subscription,
         "items",
@@ -143,11 +116,6 @@ def get_period_end_timestamp(subscription):
 
 
 def get_period_end_iso(subscription):
-    """
-    Convert Stripe's current billing period end
-    into an ISO-8601 string for Supabase.
-    """
-
     period_end = get_period_end_timestamp(
         subscription
     )
@@ -180,19 +148,6 @@ def get_subscription_status(subscription):
 
 
 def get_subscription_plan_status(subscription):
-    """
-    Convert Stripe subscription state into our
-    application states.
-
-    App states:
-      active
-      canceling
-      trialing
-      past_due
-      canceled
-      inactive
-    """
-
     status = get_subscription_status(
         subscription
     )
@@ -207,17 +162,16 @@ def get_subscription_plan_status(subscription):
         if cancel_at_period_end:
             return "canceling"
 
-        return (
-            "trialing"
-            if status == "trialing"
-            else "active"
-        )
+        if status == "trialing":
+            return "trialing"
 
-    if status in {
-        "past_due",
-        "canceled",
-    }:
-        return status
+        return "active"
+
+    if status == "past_due":
+        return "past_due"
+
+    if status == "canceled":
+        return "canceled"
 
     return "inactive"
 
@@ -226,13 +180,6 @@ def find_profile_by_subscription(
     supabase: Client,
     subscription,
 ):
-    """
-    Find a Supabase profile using:
-
-    1. supabase_user_id in Stripe metadata
-    2. Stripe customer ID
-    """
-
     user_id = get_stripe_metadata_value(
         subscription,
         "supabase_user_id",
@@ -243,10 +190,7 @@ def find_profile_by_subscription(
             supabase
             .table("profiles")
             .select("id")
-            .eq(
-                "id",
-                user_id,
-            )
+            .eq("id", user_id)
             .maybe_single()
             .execute()
         )
@@ -320,10 +264,7 @@ async def create_checkout_session(
             "stripe_customer_id, stripe_subscription_id, "
             "subscription_period_end"
         )
-        .eq(
-            "id",
-            user_id,
-        )
+        .eq("id", user_id)
         .single()
         .execute()
     )
@@ -341,13 +282,10 @@ async def create_checkout_session(
     )
 
     # =====================================================
-    # EXISTING PRO SUBSCRIPTION
+    # CHECK EXISTING STRIPE SUBSCRIPTION
     # =====================================================
 
-    if (
-        profile.get("plan") == "pro"
-        and subscription_id
-    ):
+    if subscription_id:
         try:
             subscription = (
                 stripe.Subscription.retrieve(
@@ -355,7 +293,7 @@ async def create_checkout_session(
                 )
             )
 
-            period_end_iso = get_period_end_iso(
+            stripe_status = get_subscription_status(
                 subscription
             )
 
@@ -365,20 +303,36 @@ async def create_checkout_session(
                 )
             )
 
+            period_end_iso = get_period_end_iso(
+                subscription
+            )
+
             now_timestamp = datetime.now(
                 timezone.utc
             ).timestamp()
 
-            if (
-                period_end_timestamp
+            paid_period_active = (
+                period_end_timestamp is not None
                 and period_end_timestamp > now_timestamp
-            ):
+            )
+
+            # -------------------------------------------------
+            # ACTIVE OR TRIALING SUBSCRIPTION
+            # -------------------------------------------------
+
+            if stripe_status in {
+                "active",
+                "trialing",
+            } and paid_period_active:
+
                 canceling = (
                     get_subscription_is_canceling(
                         subscription
                     )
                 )
 
+                # Do not create another Checkout session.
+                # If cancellation is scheduled, remove it.
                 if canceling:
                     subscription = (
                         stripe.Subscription.modify(
@@ -393,9 +347,9 @@ async def create_checkout_session(
                         )
                     )
 
-                supabase_status = (
-                    "active"
-                    if not canceling
+                subscription_status = (
+                    "trialing"
+                    if stripe_status == "trialing"
                     else "active"
                 )
 
@@ -406,24 +360,22 @@ async def create_checkout_session(
                         {
                             "plan": "pro",
                             "subscription_status":
-                                supabase_status,
+                                subscription_status,
                             "stripe_subscription_id":
                                 subscription_id,
                             "subscription_period_end":
                                 period_end_iso,
                         }
                     )
-                    .eq(
-                        "id",
-                        user_id,
-                    )
+                    .eq("id", user_id)
                     .execute()
                 )
 
                 return {
                     "already_active": True,
-                    "message":
-                        "Your Pro subscription is already active.",
+                    "message": (
+                        "Your Pro subscription is already active."
+                    ),
                     "subscription_period_end":
                         period_end_iso,
                 }
@@ -432,7 +384,7 @@ async def create_checkout_session(
             pass
 
     # =====================================================
-    # CREATE / REUSE CUSTOMER
+    # CREATE / REUSE STRIPE CUSTOMER
     # =====================================================
 
     customer_id = profile.get(
@@ -458,49 +410,39 @@ async def create_checkout_session(
                         customer_id,
                 }
             )
-            .eq(
-                "id",
-                user_id,
-            )
+            .eq("id", user_id)
             .execute()
         )
 
     # =====================================================
-    # STRIPE CHECKOUT
+    # CREATE NEW STRIPE CHECKOUT
     # =====================================================
 
     checkout_session = (
         stripe.checkout.Session.create(
             mode="subscription",
-
             managed_payments={
                 "enabled": False,
             },
-
             customer=customer_id,
-
             line_items=[
                 {
                     "price": STRIPE_PRO_PRICE_ID,
                     "quantity": 1,
                 }
             ],
-
             success_url=(
                 f"{FRONTEND_URL}/settings/billing"
                 "?payment=success"
                 "&session_id={CHECKOUT_SESSION_ID}"
             ),
-
             cancel_url=(
                 f"{FRONTEND_URL}/settings/billing"
                 "?payment=canceled"
             ),
-
             metadata={
                 "supabase_user_id": user_id,
             },
-
             subscription_data={
                 "metadata": {
                     "supabase_user_id": user_id,
@@ -545,10 +487,7 @@ async def cancel_subscription(
             "stripe_customer_id, stripe_subscription_id, "
             "subscription_period_end"
         )
-        .eq(
-            "id",
-            user_id,
-        )
+        .eq("id", user_id)
         .single()
         .execute()
     )
@@ -573,11 +512,33 @@ async def cancel_subscription(
 
     try:
         subscription = (
+            stripe.Subscription.retrieve(
+                subscription_id
+            )
+        )
+
+        status = get_subscription_status(
+            subscription
+        )
+
+        if status not in {
+            "active",
+            "trialing",
+        }:
+            raise HTTPException(
+                status_code=400,
+                detail="The Stripe subscription is not active.",
+            )
+
+        subscription = (
             stripe.Subscription.modify(
                 subscription_id,
                 cancel_at_period_end=True,
             )
         )
+
+    except HTTPException:
+        raise
 
     except stripe.error.StripeError as error:
         raise HTTPException(
@@ -587,28 +548,6 @@ async def cancel_subscription(
 
     period_end_iso = get_period_end_iso(
         subscription
-    )
-
-    print(
-        "Subscription cancellation:",
-        {
-            "subscription_id":
-                subscription_id,
-            "status":
-                getattr(
-                    subscription,
-                    "status",
-                    None,
-                ),
-            "cancel_at_period_end":
-                getattr(
-                    subscription,
-                    "cancel_at_period_end",
-                    False,
-                ),
-            "period_end":
-                period_end_iso,
-        }
     )
 
     if not period_end_iso:
@@ -634,10 +573,7 @@ async def cancel_subscription(
                     period_end_iso,
             }
         )
-        .eq(
-            "id",
-            user_id,
-        )
+        .eq("id", user_id)
         .execute()
     )
 
@@ -678,10 +614,7 @@ async def reactivate_subscription(
             "stripe_customer_id, stripe_subscription_id, "
             "subscription_period_end"
         )
-        .eq(
-            "id",
-            user_id,
-        )
+        .eq("id", user_id)
         .single()
         .execute()
     )
@@ -715,6 +648,10 @@ async def reactivate_subscription(
             )
         )
 
+        status = get_subscription_status(
+            subscription
+        )
+
         period_end_timestamp = (
             get_period_end_timestamp(
                 subscription
@@ -726,7 +663,11 @@ async def reactivate_subscription(
         ).timestamp()
 
         if (
-            not period_end_timestamp
+            status in {
+                "canceled",
+                "incomplete_expired",
+            }
+            or not period_end_timestamp
             or period_end_timestamp <= now_timestamp
         ):
             (
@@ -743,10 +684,7 @@ async def reactivate_subscription(
                             None,
                     }
                 )
-                .eq(
-                    "id",
-                    user_id,
-                )
+                .eq("id", user_id)
                 .execute()
             )
 
@@ -759,8 +697,21 @@ async def reactivate_subscription(
                 ),
             }
 
+        if status not in {
+            "active",
+            "trialing",
+        }:
+            return {
+                "success": False,
+                "expired": False,
+                "message": (
+                    "Your Stripe subscription cannot be "
+                    "reactivated at this time."
+                ),
+            }
+
         # =================================================
-        # REMOVE CANCELLATION
+        # REMOVE SCHEDULED CANCELLATION
         # =================================================
 
         subscription = (
@@ -774,6 +725,12 @@ async def reactivate_subscription(
             subscription
         )
 
+        subscription_status = (
+            "trialing"
+            if status == "trialing"
+            else "active"
+        )
+
         (
             supabase
             .table("profiles")
@@ -781,17 +738,14 @@ async def reactivate_subscription(
                 {
                     "plan": "pro",
                     "subscription_status":
-                        "active",
+                        subscription_status,
                     "stripe_subscription_id":
                         subscription_id,
                     "subscription_period_end":
                         period_end_iso,
                 }
             )
-            .eq(
-                "id",
-                user_id,
-            )
+            .eq("id", user_id)
             .execute()
         )
 
@@ -799,7 +753,7 @@ async def reactivate_subscription(
             "success": True,
             "expired": False,
             "subscription_status":
-                "active",
+                subscription_status,
             "subscription_period_end":
                 period_end_iso,
             "message": (
@@ -873,7 +827,6 @@ async def stripe_webhook(
     # =====================================================
 
     if event_type == "checkout.session.completed":
-
         session = event["data"]["object"]
 
         user_id = get_stripe_metadata_value(
@@ -953,24 +906,17 @@ async def stripe_webhook(
                                 "trialing",
                             }
                             else "free",
-
                             "subscription_status":
                                 subscription_status,
-
                             "stripe_customer_id":
                                 customer_id,
-
                             "stripe_subscription_id":
                                 subscription_id,
-
                             "subscription_period_end":
                                 period_end_iso,
                         }
                     )
-                    .eq(
-                        "id",
-                        user_id,
-                    )
+                    .eq("id", user_id)
                     .execute()
                 )
 
@@ -995,7 +941,6 @@ async def stripe_webhook(
         "customer.subscription.created",
         "customer.subscription.updated",
     ):
-
         subscription = event["data"]["object"]
 
         subscription_id = getattr(
@@ -1048,46 +993,41 @@ async def stripe_webhook(
         )
 
         if not profile:
-
             print(
                 "WARNING: Could not find Supabase "
                 "profile for subscription."
             )
 
         else:
-
             user_id = profile["id"]
 
             if status in {
                 "active",
                 "trialing",
             }:
-
                 plan = "pro"
 
                 if cancel_at_period_end:
                     subscription_status = (
                         "canceling"
                     )
-                else:
+                elif status == "trialing":
                     subscription_status = (
                         "trialing"
-                        if status == "trialing"
-                        else "active"
+                    )
+                else:
+                    subscription_status = (
+                        "active"
                     )
 
             elif status == "past_due":
-
                 plan = "pro"
-
                 subscription_status = (
                     "past_due"
                 )
 
             else:
-
                 plan = "free"
-
                 subscription_status = (
                     "inactive"
                 )
@@ -1108,10 +1048,7 @@ async def stripe_webhook(
                             period_end_iso,
                     }
                 )
-                .eq(
-                    "id",
-                    user_id,
-                )
+                .eq("id", user_id)
                 .execute()
             )
 
@@ -1128,7 +1065,6 @@ async def stripe_webhook(
     # =====================================================
 
     elif event_type == "customer.subscription.deleted":
-
         subscription = event["data"]["object"]
 
         subscription_id = getattr(
@@ -1148,7 +1084,6 @@ async def stripe_webhook(
         )
 
         if profile:
-
             user_id = profile["id"]
 
             (
@@ -1165,10 +1100,7 @@ async def stripe_webhook(
                             None,
                     }
                 )
-                .eq(
-                    "id",
-                    user_id,
-                )
+                .eq("id", user_id)
                 .execute()
             )
 
@@ -1178,7 +1110,6 @@ async def stripe_webhook(
             )
 
         else:
-
             print(
                 "WARNING: Could not find profile "
                 "for deleted subscription."
@@ -1189,7 +1120,6 @@ async def stripe_webhook(
     # =====================================================
 
     elif event_type == "invoice.paid":
-
         invoice = event["data"]["object"]
 
         subscription_id = getattr(
@@ -1207,9 +1137,7 @@ async def stripe_webhook(
         )
 
         if subscription_id:
-
             try:
-
                 subscription = (
                     stripe.Subscription.retrieve(
                         subscription_id
@@ -1224,7 +1152,6 @@ async def stripe_webhook(
                 )
 
                 if profile:
-
                     user_id = profile["id"]
 
                     period_end_iso = (
@@ -1239,18 +1166,21 @@ async def stripe_webhook(
                         )
                     )
 
-                    # IMPORTANT:
-                    # Do NOT overwrite a scheduled
-                    # cancellation with "active".
+                    status = (
+                        get_subscription_status(
+                            subscription
+                        )
+                    )
 
                     if cancel_at_period_end:
-
                         subscription_status = (
                             "canceling"
                         )
-
+                    elif status == "trialing":
+                        subscription_status = (
+                            "trialing"
+                        )
                     else:
-
                         subscription_status = (
                             "active"
                         )
@@ -1269,10 +1199,7 @@ async def stripe_webhook(
                                     period_end_iso,
                             }
                         )
-                        .eq(
-                            "id",
-                            user_id,
-                        )
+                        .eq("id", user_id)
                         .execute()
                     )
 
@@ -1284,14 +1211,12 @@ async def stripe_webhook(
                     )
 
                 else:
-
                     print(
                         "WARNING: Invoice paid but "
                         "no matching profile found."
                     )
 
             except stripe.error.StripeError as error:
-
                 print(
                     "ERROR processing paid invoice:",
                     str(error),
@@ -1302,7 +1227,6 @@ async def stripe_webhook(
     # =====================================================
 
     elif event_type == "invoice.payment_failed":
-
         invoice = event["data"]["object"]
 
         subscription_id = getattr(
@@ -1318,6 +1242,67 @@ async def stripe_webhook(
                     subscription_id,
             }
         )
+
+        if subscription_id:
+            try:
+                subscription = (
+                    stripe.Subscription.retrieve(
+                        subscription_id
+                    )
+                )
+
+                profile = (
+                    find_profile_by_subscription(
+                        supabase,
+                        subscription,
+                    )
+                )
+
+                if profile:
+                    user_id = profile["id"]
+
+                    status = (
+                        get_subscription_status(
+                            subscription
+                        )
+                    )
+
+                    period_end_iso = (
+                        get_period_end_iso(
+                            subscription
+                        )
+                    )
+
+                    if status == "past_due":
+                        (
+                            supabase
+                            .table("profiles")
+                            .update(
+                                {
+                                    "plan": "pro",
+                                    "subscription_status":
+                                        "past_due",
+                                    "stripe_subscription_id":
+                                        subscription_id,
+                                    "subscription_period_end":
+                                        period_end_iso,
+                                }
+                            )
+                            .eq("id", user_id)
+                            .execute()
+                        )
+
+                        print(
+                            f"WARNING: Payment failed "
+                            f"for user {user_id}. "
+                            "Subscription is past_due."
+                        )
+
+            except stripe.error.StripeError as error:
+                print(
+                    "ERROR processing failed invoice:",
+                    str(error),
+                )
 
     return {
         "received": True,
