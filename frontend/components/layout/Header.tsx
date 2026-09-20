@@ -15,7 +15,6 @@ export default function Header() {
 
   const accountRef = useRef<HTMLDivElement>(null);
 
-  // Close account menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -47,18 +46,31 @@ export default function Header() {
   }
 
   async function handleSignOut() {
+    if (signingOut) return;
+
     setSigningOut(true);
+    setAccountOpen(false);
 
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
 
-    router.push("/auth/signin");
-    router.refresh();
+      if (error) {
+        console.error("Sign out error:", error);
+        setSigningOut(false);
+        return;
+      }
+
+      router.replace("/auth/signin");
+      router.refresh();
+    } catch (error) {
+      console.error("Sign out error:", error);
+      setSigningOut(false);
+    }
   }
 
   return (
     <header className="sticky top-0 z-50 h-16 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="flex h-full items-center justify-between px-6">
-        {/* Brand */}
         <Link
           href="/dashboard"
           className="group flex items-center gap-3"
@@ -96,9 +108,7 @@ export default function Header() {
           </span>
         </Link>
 
-        {/* Right side */}
         <div className="flex items-center gap-4">
-          {/* Search */}
           <form
             onSubmit={handleSearch}
             className="relative hidden sm:block"
@@ -150,7 +160,6 @@ export default function Header() {
             />
           </form>
 
-          {/* Account */}
           <div ref={accountRef} className="relative">
             <button
               type="button"
@@ -206,7 +215,6 @@ export default function Header() {
               </svg>
             </button>
 
-            {/* Account dropdown */}
             {accountOpen && (
               <div
                 className="
