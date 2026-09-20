@@ -50,7 +50,12 @@ export async function GET(request: Request) {
     );
   }
 
-  // Determine selected plan
+  /*
+   * Determine the selected plan.
+   *
+   * Query parameter takes priority.
+   * Supabase user metadata is the fallback.
+   */
   const selectedPlan =
     plan === "pro"
       ? "pro"
@@ -58,7 +63,11 @@ export async function GET(request: Request) {
         ? "pro"
         : "free";
 
-  // Pro signup → Stripe Checkout
+  /*
+   * PRO SIGNUP
+   *
+   * Verified Pro users go directly to Stripe Checkout.
+   */
   if (selectedPlan === "pro") {
     if (!API_URL) {
       console.error(
@@ -66,7 +75,7 @@ export async function GET(request: Request) {
       );
 
       return NextResponse.redirect(
-        `${origin}/billing?checkout_error=true`
+        `${origin}/settings/billing?checkout_error=true`
       );
     }
 
@@ -75,13 +84,16 @@ export async function GET(request: Request) {
         `${API_URL}/api/billing/create-checkout-session`,
         {
           method: "POST",
+
           headers: {
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
             user_id: user.id,
             email: user.email,
           }),
+
           cache: "no-store",
         }
       );
@@ -95,13 +107,13 @@ export async function GET(request: Request) {
         );
 
         return NextResponse.redirect(
-          `${origin}/billing?checkout_error=true`
+          `${origin}/settings/billing?checkout_error=true`
         );
       }
 
       if (data.already_active) {
         return NextResponse.redirect(
-          `${origin}/billing?already_active=true`
+          `${origin}/settings/billing?already_active=true`
         );
       }
 
@@ -112,11 +124,16 @@ export async function GET(request: Request) {
         );
 
         return NextResponse.redirect(
-          `${origin}/billing?checkout_error=true`
+          `${origin}/settings/billing?checkout_error=true`
         );
       }
 
-      return NextResponse.redirect(data.checkout_url);
+      /*
+       * Send the verified user directly to Stripe.
+       */
+      return NextResponse.redirect(
+        data.checkout_url
+      );
     } catch (error) {
       console.error(
         "Pro checkout initialization error:",
@@ -124,12 +141,16 @@ export async function GET(request: Request) {
       );
 
       return NextResponse.redirect(
-        `${origin}/billing?checkout_error=true`
+        `${origin}/settings/billing?checkout_error=true`
       );
     }
   }
 
-  // Free signup → Dashboard
+  /*
+   * FREE SIGNUP
+   *
+   * Verified Free users go directly to Dashboard.
+   */
   return NextResponse.redirect(
     `${origin}/dashboard`
   );

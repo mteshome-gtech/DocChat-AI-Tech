@@ -1,24 +1,36 @@
 "use client";
 
 import { FormEvent, Suspense, useState } from "react";
+
 import Link from "next/link";
+
 import { useRouter, useSearchParams } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/client";
 
 function SignupContent() {
   const router = useRouter();
+
   const searchParams = useSearchParams();
+
   const supabase = createClient();
 
   const requestedPlan = searchParams.get("plan");
+
   const initialPlan = requestedPlan === "pro" ? "pro" : "free";
 
   const [plan, setPlan] = useState<"free" | "pro">(initialPlan);
+
   const [name, setName] = useState("");
+
   const [email, setEmail] = useState("");
+
   const [password, setPassword] = useState("");
+
   const [confirmPassword, setConfirmPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
+
   const [error, setError] = useState("");
 
   async function handleSignup(e: FormEvent<HTMLFormElement>) {
@@ -47,12 +59,12 @@ function SignupContent() {
       `${window.location.origin}/auth/callback?plan=${plan}`;
 
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.trim(),
       password,
       options: {
         emailRedirectTo: redirectUrl,
         data: {
-          full_name: name,
+          full_name: name.trim(),
           selected_plan: plan,
         },
       },
@@ -64,15 +76,34 @@ function SignupContent() {
       return;
     }
 
+    /*
+     * If Supabase immediately created an authenticated session,
+     * continue directly to the appropriate destination.
+     *
+     * Normally, with email confirmation enabled, there will be
+     * no session here and the user will receive the verification email.
+     */
     if (data.session) {
       if (plan === "pro") {
-        router.push("/billing?plan=pro");
+        router.replace("/settings/billing?plan=pro");
       } else {
-        router.push("/dashboard");
+        router.replace("/dashboard");
       }
-    } else {
-      router.push(`/auth/verify?plan=${plan}`);
+
+      return;
     }
+
+    /*
+     * Email confirmation is required.
+     *
+     * The selected plan is preserved both:
+     * 1. In the verification page URL.
+     * 2. In Supabase user metadata.
+     *
+     * The callback can therefore recover the Pro selection even
+     * if the query parameter is not preserved by the email flow.
+     */
+    router.replace(`/auth/verify?plan=${plan}`);
   }
 
   return (
@@ -163,7 +194,9 @@ function SignupContent() {
                 >
                   <div
                     className={`text-[10px] uppercase tracking-[0.2em] ${
-                      plan === "free" ? "text-white/40" : "text-black/35"
+                      plan === "free"
+                        ? "text-white/40"
+                        : "text-black/35"
                     }`}
                   >
                     Free
@@ -173,7 +206,9 @@ function SignupContent() {
 
                   <div
                     className={`mt-2 text-xs leading-5 ${
-                      plan === "free" ? "text-white/45" : "text-black/40"
+                      plan === "free"
+                        ? "text-white/45"
+                        : "text-black/40"
                     }`}
                   >
                     Start exploring
@@ -191,7 +226,9 @@ function SignupContent() {
                 >
                   <div
                     className={`text-[10px] uppercase tracking-[0.2em] ${
-                      plan === "pro" ? "text-blue-400" : "text-blue-600"
+                      plan === "pro"
+                        ? "text-blue-400"
+                        : "text-blue-600"
                     }`}
                   >
                     Pro
@@ -201,7 +238,9 @@ function SignupContent() {
 
                   <div
                     className={`mt-2 text-xs leading-5 ${
-                      plan === "pro" ? "text-white/45" : "text-black/40"
+                      plan === "pro"
+                        ? "text-white/45"
+                        : "text-black/40"
                     }`}
                   >
                     Full workspace
@@ -216,7 +255,9 @@ function SignupContent() {
                   </span>
 
                   <span className="text-xs font-medium uppercase tracking-[0.15em] text-blue-600">
-                    {plan === "pro" ? "Pro · $19.99/mo" : "Free · $0"}
+                    {plan === "pro"
+                      ? "Pro · $19.99/mo"
+                      : "Free · $0"}
                   </span>
                 </div>
               </div>
