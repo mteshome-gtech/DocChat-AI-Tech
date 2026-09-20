@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+
 import { createClient } from "@/lib/supabase/server";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
@@ -58,8 +58,18 @@ export async function GET(request: Request) {
         ? "pro"
         : "free";
 
-  // Pro signup automatically goes to Stripe Checkout
+  // Pro signup → Stripe Checkout
   if (selectedPlan === "pro") {
+    if (!API_URL) {
+      console.error(
+        "NEXT_PUBLIC_API_URL is not configured."
+      );
+
+      return NextResponse.redirect(
+        `${origin}/billing?checkout_error=true`
+      );
+    }
+
     try {
       const response = await fetch(
         `${API_URL}/api/billing/create-checkout-session`,
@@ -119,7 +129,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // Free signup
+  // Free signup → Dashboard
   return NextResponse.redirect(
     `${origin}/dashboard`
   );
