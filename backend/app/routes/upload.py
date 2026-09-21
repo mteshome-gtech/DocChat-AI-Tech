@@ -1,37 +1,43 @@
 import os
-import shutil
+import uuid
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import (
     APIRouter,
-    UploadFile,
     File,
-    HTTPException,
     Header,
+    HTTPException,
+    UploadFile,
 )
-from supabase import create_client, Client
+from supabase import create_client
 
-from app.services.rag import (
-    extract_text,
-    chunk_text,
-)
-from app.services.embeddings import (
-    generate_embedding,
-)
+from app.services.embeddings import generate_embedding
+from app.services.rag import chunk_text, extract_text
 
 load_dotenv()
+
 
 router = APIRouter(
     prefix="/upload",
     tags=["Upload"],
 )
 
-UPLOAD_DIR = Path("uploads")
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+UPLOAD_DIR = Path(
+    os.getenv("UPLOAD_DIR", "uploads")
+)
+
 UPLOAD_DIR.mkdir(
     parents=True,
     exist_ok=True,
 )
+
 
 SUPABASE_URL = os.getenv(
     "SUPABASE_URL"
@@ -41,37 +47,119 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv(
     "SUPABASE_SERVICE_ROLE_KEY"
 )
 
-SUPABASE_STORAGE_BUCKET = os.getenv(
-    "SUPABASE_STORAGE_BUCKET",
+SUPABASE_BUCKET = os.getenv(
+    "SUPABASE_BUCKET",
     "documents",
 )
 
-if (
-    not SUPABASE_URL
-    or not SUPABASE_SERVICE_ROLE_KEY
-):
+
+if not SUPABASE_URL:
     raise RuntimeError(
-        "Supabase environment variables are not configured."
+        "SUPABASE_URL is not configured."
     )
 
-supabase: Client = create_client(
+if not SUPABASE_SERVICE_ROLE_KEY:
+    raise RuntimeError(
+        "SUPABASE_SERVICE_ROLE_KEY is not configured."
+    )
+
+
+supabase = create_client(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
 )
 
 
-def get_authenticated_user(
-    authorization: str | None,
-):
-    """
-    Verify the Supabase access token and return
-    the authenticated user's information.
-    """
+# ============================================================
+# FILE TYPES
+# ============================================================
 
+ALLOWED_EXTENSIONS = {
+    ".pdf",
+    ".docx",
+    ".txt",
+}
+
+
+def get_content_type(
+    extension: str,
+) -> str:
+
+    mapping = {
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".docx": (
+            "application/vnd.openxmlformats-officedocument."
+            "wordprocessingml.document"
+        ),
+    }
+
+    return mapping.get(
+        extension.lower(),
+        "application/octet-stream",
+    )
+
+
+def sanitize_filename(
+    filename: str,
+) -> str:
+
+    original = Path(
+        filename or "document"
+    ).name
+
+    stem = Path(original).stem
+    suffix = Path(original).suffix.lower()
+
+    safe_stem = "".join(
+        character
+        for character in stem
+        if character.isalnum()
+        or character in (
+            " ",
+            "-",
+            "_",
+            ".",
+        )
+    ).strip()
+
+    if not safe_stem:
+        safe_stem = "document"
+
+    return f"{safe_stem}{suffix}"
+
+
+def create_unique_temp_path(
+    filename: str,
+) -> Path:
+
+    extension = (
+        Path(filename)
+        .suffix
+        .lower()
+    )
+
+    return (
+        UPLOAD_DIR
+        / (
+            f"upload_"
+            f"{uuid.uuid4().hex}"
+            f"{extension}"
+        )
+    )
+
+
+# ============================================================
+# AUTHENTICATION
+# ============================================================
+
+def get_authenticated_user(
+    authorization: Optional[str],
+):
     if not authorization:
         raise HTTPException(
             status_code=401,
-            detail="Authorization header is required.",
+            detail="Authentication required.",
         )
 
     if not authorization.startswith(
@@ -82,138 +170,153 @@ def get_authenticated_user(
             detail="Invalid authorization header.",
         )
 
-    access_token = authorization.replace(
+    token = authorization.replace(
         "Bearer ",
         "",
         1,
     ).strip()
 
-    if not access_token:
+    if not token:
         raise HTTPException(
             status_code=401,
-            detail="Access token is missing.",
+            detail="Invalid authentication token.",
         )
 
     try:
-        user_response = (
+        response = (
             supabase.auth.get_user(
-                access_token
+                token
             )
         )
 
-        user = user_response.user
+        user = response.user
 
-        if not user:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid or expired session.",
-            )
-
-        return user
-
-    except HTTPException:
-        raise
-
-    except Exception as error:
-        print(
-            "Authentication error:",
-            error,
-        )
-
+    except Exception:
         raise HTTPException(
             status_code=401,
-            detail=(
-                "Invalid or expired "
-                "authentication token."
-            ),
+            detail="Invalid or expired session.",
         )
 
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired session.",
+        )
 
-def get_content_type(
-    extension: str,
-) -> str:
-    content_types = {
-        ".pdf": "application/pdf",
-        ".docx": (
-            "application/vnd.openxmlformats-officedocument."
-            "wordprocessingml.document"
-        ),
-        ".txt": "text/plain",
-    }
+    return user
 
-    return content_types.get(
-        extension,
-        "application/octet-stream",
-    )
 
+# ============================================================
+# CREATE SIGNED URL
+# ============================================================
+
+def create_signed_url(
+    storage_path: str,
+    expires_in: int = 300,
+) -> Optional[str]:
+
+    if not storage_path:
+        return None
+
+    try:
+        result = (
+            supabase
+            .storage
+            .from_(SUPABASE_BUCKET)
+            .create_signed_url(
+                storage_path,
+                expires_in,
+            )
+        )
+
+        if isinstance(result, dict):
+            return result.get(
+                "signedURL"
+            )
+
+        return None
+
+    except Exception:
+        return None
+
+
+# ============================================================
+# UPLOAD DOCUMENT
+# ============================================================
 
 @router.post("/")
 async def upload_document(
     file: UploadFile = File(...),
-    authorization: str | None = Header(
+    authorization: Optional[str] = Header(
         default=None
     ),
 ):
-    """
-    Upload a document.
-
-    The original file is stored in Supabase Storage.
-    Extracted text is separately chunked and embedded
-    for AI/RAG functionality.
-    """
-
     user = get_authenticated_user(
         authorization
     )
 
-    allowed_extensions = {
-        ".pdf",
-        ".docx",
-        ".txt",
-    }
-
-    if not file.filename:
-        raise HTTPException(
-            status_code=400,
-            detail="Filename is required.",
-        )
-
-    file_extension = Path(
+    original_filename = (
         file.filename
-    ).suffix.lower()
+        or "document"
+    )
 
-    if (
-        file_extension
-        not in allowed_extensions
-    ):
+    safe_filename = sanitize_filename(
+        original_filename
+    )
+
+    extension = (
+        Path(safe_filename)
+        .suffix
+        .lower()
+    )
+
+    if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Only PDF, DOCX, and TXT files "
-                "are supported."
+                "Supported document types are "
+                "PDF, DOCX, and TXT."
             ),
         )
 
-    safe_filename = Path(
-        file.filename
-    ).name
-
-    file_path = (
-        UPLOAD_DIR / safe_filename
+    temp_path = create_unique_temp_path(
+        safe_filename
     )
 
-    document_id = None
-    storage_path = None
-    storage_uploaded = False
+    document_id: Optional[str] = None
+    storage_path: Optional[str] = None
 
     try:
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(
-                file.file,
-                buffer,
+        # ====================================================
+        # SAVE TEMP FILE
+        # ====================================================
+
+        with temp_path.open(
+            "wb"
+        ) as destination:
+
+            while True:
+                chunk = await file.read(
+                    1024 * 1024
+                )
+
+                if not chunk:
+                    break
+
+                destination.write(
+                    chunk
+                )
+
+        await file.close()
+
+        if not temp_path.exists():
+            raise RuntimeError(
+                "Unable to save uploaded file."
             )
 
-        file_size = file_path.stat().st_size
+        file_size = (
+            temp_path.stat().st_size
+        )
 
         if file_size <= 0:
             raise HTTPException(
@@ -221,89 +324,103 @@ async def upload_document(
                 detail="The uploaded file is empty.",
             )
 
-        text = extract_text(
-            str(file_path)
+        # ====================================================
+        # EXTRACT TEXT
+        # ====================================================
+
+        try:
+            text = extract_text(
+                str(temp_path)
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "We could not read this document. "
+                    "Please verify that the file is valid."
+                ),
+            ) from exc
+
+        word_count = (
+            len(text.split())
+            if text
+            else 0
         )
 
-        if not text:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "No readable text was found "
-                    "in the document."
-                ),
-            )
+        # ====================================================
+        # CREATE DOCUMENT RECORD
+        # ====================================================
 
-        chunks = chunk_text(text)
+        document_record = {
+            "user_id": str(user.id),
+            "name": safe_filename,
+            "file_name": safe_filename,
+            "file_type": get_content_type(
+                extension
+            ),
+            "file_size": file_size,
+            "status": "processing",
+            "word_count": word_count,
+        }
 
-        if not chunks:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "The document could not be "
-                    "split into readable chunks."
-                ),
-            )
-
-        document_result = (
+        insert_result = (
             supabase
             .table("documents")
             .insert(
-                {
-                    "user_id": str(user.id),
-                    "name": safe_filename,
-                    "file_name": safe_filename,
-                    "file_type": file_extension,
-                    "file_size": file_size,
-                    "status": "processing",
-                    "word_count": len(
-                        text.split()
-                    ),
-                }
+                document_record
             )
             .execute()
         )
 
-        if not document_result.data:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "Failed to create "
-                    "document record."
-                ),
-            )
-
-        document = (
-            document_result.data[0]
+        inserted_rows = (
+            insert_result.data or []
         )
 
-        document_id = document["id"]
+        if not inserted_rows:
+            raise RuntimeError(
+                "Unable to create document record."
+            )
+
+        document_id = str(
+            inserted_rows[0]["id"]
+        )
+
+        # ====================================================
+        # STORAGE PATH
+        # ====================================================
 
         storage_path = (
-            f"{str(user.id)}/"
+            f"{user.id}/"
             f"{document_id}/"
             f"{safe_filename}"
         )
 
-        with file_path.open("rb") as uploaded_file:
-            file_bytes = uploaded_file.read()
+        file_bytes = (
+            temp_path.read_bytes()
+        )
+
+        # ====================================================
+        # UPLOAD TO STORAGE
+        # ====================================================
 
         supabase.storage.from_(
-            SUPABASE_STORAGE_BUCKET
+            SUPABASE_BUCKET
         ).upload(
             storage_path,
             file_bytes,
             {
                 "content-type": get_content_type(
-                    file_extension
+                    extension
                 ),
-                "upsert": "false",
+                "upsert": False,
             },
         )
 
-        storage_uploaded = True
+        # ====================================================
+        # UPDATE STORAGE PATH
+        # ====================================================
 
-        storage_update = (
+        (
             supabase
             .table("documents")
             .update(
@@ -315,216 +432,191 @@ async def upload_document(
                 "id",
                 document_id,
             )
+            .eq(
+                "user_id",
+                str(user.id),
+            )
             .execute()
         )
 
-        if not storage_update.data:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "Failed to save document "
-                    "storage information."
-                ),
-            )
+        # ====================================================
+        # CREATE RAG CHUNKS
+        # ====================================================
 
-        chunk_rows = []
+        chunks = chunk_text(
+            text
+        )
 
-        for index, chunk in enumerate(
-            chunks
-        ):
-            print(
-                f"[EMBEDDING] "
-                f"Document={document_id} "
-                f"Chunk={index + 1}/{len(chunks)}"
-            )
-
-            embedding = (
-                await generate_embedding(
-                    chunk
+        for chunk in chunks:
+            try:
+                embedding = (
+                    await generate_embedding(
+                        chunk
+                    )
                 )
-            )
+            except Exception:
+                # Do not allow one embedding failure to
+                # destroy the user's uploaded document.
+                continue
 
-            chunk_rows.append(
-                {
-                    "document_id": document_id,
-                    "chunk_index": index,
-                    "content": chunk,
-                    "embedding": embedding,
-                }
-            )
+            if not embedding:
+                continue
 
-        chunk_result = (
+            try:
+                (
+                    supabase
+                    .table("document_chunks")
+                    .insert(
+                        {
+                            "document_id": document_id,
+                            "content": chunk,
+                            "embedding": embedding,
+                        }
+                    )
+                    .execute()
+                )
+            except Exception:
+                # Chunk indexing failure must not invalidate
+                # the uploaded source document.
+                continue
+
+        # ====================================================
+        # MARK READY
+        # ====================================================
+
+        (
             supabase
-            .table("document_chunks")
-            .insert(chunk_rows)
-            .execute()
-        )
-
-        if not chunk_result.data:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "Failed to create "
-                    "document chunks."
-                ),
-            )
-
-        supabase \
-            .table("documents") \
+            .table("documents")
             .update(
                 {
                     "status": "ready",
                 }
-            ) \
+            )
             .eq(
                 "id",
                 document_id,
-            ) \
+            )
+            .eq(
+                "user_id",
+                str(user.id),
+            )
             .execute()
+        )
 
-        print(
-            f"[UPLOAD] "
-            f"Document={document_id} "
-            f"Chunks={len(chunks)} "
-            f"Storage={storage_path} "
-            f"Status=ready"
+        # ====================================================
+        # PREVIEW URL
+        # ====================================================
+
+        preview_url = create_signed_url(
+            storage_path,
+            expires_in=300,
         )
 
         return {
-            "message": (
-                "Document uploaded "
-                "and indexed successfully."
-            ),
+            "success": True,
             "document_id": document_id,
-            "user_id": str(user.id),
             "filename": safe_filename,
-            "chunks": len(chunks),
-            "words": len(text.split()),
-            "embedded": True,
-            "stored": True,
+            "file_type": get_content_type(
+                extension
+            ),
+            "file_size": file_size,
+            "word_count": word_count,
+            "status": "ready",
+            "preview_url": preview_url,
         }
 
     except HTTPException:
-        if document_id:
-            try:
-                supabase \
-                    .table("document_chunks") \
-                    .delete() \
-                    .eq(
-                        "document_id",
-                        document_id,
-                    ) \
-                    .execute()
-
-                supabase \
-                    .table("documents") \
-                    .delete() \
-                    .eq(
-                        "id",
-                        document_id,
-                    ) \
-                    .execute()
-
-            except Exception as cleanup_error:
-                print(
-                    "Database cleanup error:",
-                    cleanup_error,
-                )
-
-        if (
-            storage_uploaded
-            and storage_path
-        ):
-            try:
-                supabase.storage.from_(
-                    SUPABASE_STORAGE_BUCKET
-                ).remove(
-                    [storage_path]
-                )
-            except Exception as storage_cleanup_error:
-                print(
-                    "Storage cleanup error:",
-                    storage_cleanup_error,
-                )
-
         raise
 
-    except Exception as error:
-        print(
-            "Upload error:",
-            error,
-        )
+    except Exception:
+        # ====================================================
+        # CLEAN DATABASE
+        # ====================================================
 
         if document_id:
             try:
-                supabase \
-                    .table("document_chunks") \
-                    .delete() \
+                (
+                    supabase
+                    .table("document_chunks")
+                    .delete()
                     .eq(
                         "document_id",
                         document_id,
-                    ) \
+                    )
                     .execute()
+                )
+            except Exception:
+                pass
 
-                supabase \
-                    .table("documents") \
-                    .delete() \
+            try:
+                (
+                    supabase
+                    .table("documents")
+                    .delete()
                     .eq(
                         "id",
                         document_id,
-                    ) \
+                    )
+                    .eq(
+                        "user_id",
+                        str(user.id),
+                    )
                     .execute()
-
-            except Exception as cleanup_error:
-                print(
-                    "Cleanup error:",
-                    cleanup_error,
                 )
+            except Exception:
+                pass
 
-        if (
-            storage_uploaded
-            and storage_path
-        ):
+        # ====================================================
+        # CLEAN STORAGE
+        # ====================================================
+
+        if storage_path:
             try:
-                supabase.storage.from_(
-                    SUPABASE_STORAGE_BUCKET
-                ).remove(
-                    [storage_path]
+                (
+                    supabase
+                    .storage
+                    .from_(SUPABASE_BUCKET)
+                    .remove(
+                        [storage_path]
+                    )
                 )
-            except Exception as storage_cleanup_error:
-                print(
-                    "Storage cleanup error:",
-                    storage_cleanup_error,
-                )
+            except Exception:
+                pass
 
         raise HTTPException(
             status_code=500,
             detail=(
-                f"Upload failed: {str(error)}"
+                "The document could not be uploaded. "
+                "Please try again."
             ),
         )
 
     finally:
-        if file_path.exists():
-            try:
-                file_path.unlink()
-            except Exception as cleanup_error:
-                print(
-                    "Temporary file cleanup error:",
-                    cleanup_error,
-                )
+        # ====================================================
+        # DELETE TEMP FILE
+        # ====================================================
+
+        try:
+            if temp_path.exists():
+                temp_path.unlink()
+        except Exception:
+            pass
 
 
-@router.get("/{document_id}/preview")
-async def get_document_preview(
-    document_id: str,
-    authorization: str | None = Header(
+# ============================================================
+# LIST MY DOCUMENTS
+# ============================================================
+
+@router.get("/documents")
+async def list_documents(
+    authorization: Optional[str] = Header(
         default=None
     ),
 ):
     """
-    Generate a short-lived signed URL for the
-    original uploaded document.
+    Return only documents owned by the authenticated user.
+
+    Used by the Translate page's My Documents selector.
     """
 
     user = get_authenticated_user(
@@ -532,12 +624,92 @@ async def get_document_preview(
     )
 
     try:
-        document_result = (
+        result = (
             supabase
             .table("documents")
             .select(
-                "id, user_id, name, file_name, "
-                "file_type, storage_path"
+                "id,user_id,name,file_name,file_type,"
+                "file_size,status,word_count,storage_path"
+            )
+            .eq(
+                "user_id",
+                str(user.id),
+            )
+            .order(
+                "created_at",
+                desc=True,
+            )
+            .execute()
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to load your documents."
+            ),
+        )
+
+    documents = []
+
+    for document in (
+        result.data or []
+    ):
+        # Never expose storage paths to the browser.
+        documents.append(
+            {
+                "id": document.get(
+                    "id"
+                ),
+                "name": document.get(
+                    "name"
+                ),
+                "file_name": document.get(
+                    "file_name"
+                ),
+                "file_type": document.get(
+                    "file_type"
+                ),
+                "file_size": document.get(
+                    "file_size"
+                ),
+                "status": document.get(
+                    "status"
+                ),
+                "word_count": document.get(
+                    "word_count"
+                ),
+            }
+        )
+
+    return {
+        "success": True,
+        "documents": documents,
+    }
+
+
+# ============================================================
+# DOCUMENT PREVIEW
+# ============================================================
+
+@router.get("/{document_id}/preview")
+async def preview_document(
+    document_id: str,
+    authorization: Optional[str] = Header(
+        default=None
+    ),
+):
+    user = get_authenticated_user(
+        authorization
+    )
+
+    try:
+        result = (
+            supabase
+            .table("documents")
+            .select(
+                "id,user_id,file_name,file_type,"
+                "storage_path,status"
             )
             .eq(
                 "id",
@@ -551,89 +723,40 @@ async def get_document_preview(
             .execute()
         )
 
-        documents = (
-            document_result.data or []
-        )
-
-        if not documents:
-            raise HTTPException(
-                status_code=404,
-                detail="Document not found.",
-            )
-
-        document = documents[0]
-
-        storage_path = document.get(
-            "storage_path"
-        )
-
-        if not storage_path:
-            raise HTTPException(
-                status_code=404,
-                detail=(
-                    "The original file is not "
-                    "available for preview."
-                ),
-            )
-
-        signed_result = (
-            supabase.storage
-            .from_(
-                SUPABASE_STORAGE_BUCKET
-            )
-            .create_signed_url(
-                storage_path,
-                300,
-            )
-        )
-
-        signed_url = None
-
-        if isinstance(
-            signed_result,
-            dict,
-        ):
-            signed_url = (
-                signed_result.get(
-                    "signedURL"
-                )
-                or signed_result.get(
-                    "signedUrl"
-                )
-            )
-
-        if not signed_url:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "Failed to create a secure "
-                    "document preview URL."
-                ),
-            )
-
-        return {
-            "success": True,
-            "document_id": document_id,
-            "filename": (
-                document.get("name")
-                or document.get("file_name")
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to retrieve the document."
             ),
-            "file_type": document.get(
-                "file_type"
-            ),
-            "url": signed_url,
-            "expires_in": 300,
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as error:
-        print(
-            "Preview URL error:",
-            error,
         )
 
+    rows = result.data or []
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found.",
+        )
+
+    document = rows[0]
+
+    if not document.get(
+        "storage_path"
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Document storage is unavailable."
+            ),
+        )
+
+    signed_url = create_signed_url(
+        document["storage_path"],
+        expires_in=300,
+    )
+
+    if not signed_url:
         raise HTTPException(
             status_code=500,
             detail=(
@@ -641,29 +764,43 @@ async def get_document_preview(
             ),
         )
 
+    return {
+        "success": True,
+        "document_id": document_id,
+        "filename": document.get(
+            "file_name"
+        ),
+        "file_type": document.get(
+            "file_type"
+        ),
+        "status": document.get(
+            "status"
+        ),
+        "preview_url": signed_url,
+    }
+
+
+# ============================================================
+# DELETE DOCUMENT
+# ============================================================
 
 @router.delete("/{document_id}")
 async def delete_document(
     document_id: str,
-    authorization: str | None = Header(
+    authorization: Optional[str] = Header(
         default=None
     ),
 ):
-    """
-    Delete the original file, indexed chunks,
-    and document database record.
-    """
-
     user = get_authenticated_user(
         authorization
     )
 
     try:
-        document_result = (
+        result = (
             supabase
             .table("documents")
             .select(
-                "id, user_id, storage_path"
+                "id,user_id,storage_path"
             )
             .eq(
                 "id",
@@ -677,45 +814,69 @@ async def delete_document(
             .execute()
         )
 
-        documents = (
-            document_result.data or []
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to retrieve the document."
+            ),
         )
 
-        if not documents:
-            raise HTTPException(
-                status_code=404,
-                detail="Document not found.",
-            )
+    rows = result.data or []
 
-        document = documents[0]
-
-        storage_path = document.get(
-            "storage_path"
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found.",
         )
 
-        if storage_path:
-            try:
-                supabase.storage.from_(
-                    SUPABASE_STORAGE_BUCKET
-                ).remove(
+    document = rows[0]
+
+    # ========================================================
+    # DELETE STORAGE
+    # ========================================================
+
+    storage_path = document.get(
+        "storage_path"
+    )
+
+    if storage_path:
+        try:
+            (
+                supabase
+                .storage
+                .from_(SUPABASE_BUCKET)
+                .remove(
                     [storage_path]
                 )
-            except Exception as storage_error:
-                print(
-                    "Storage deletion warning:",
-                    storage_error,
-                )
+            )
+        except Exception:
+            pass
 
-        supabase \
-            .table("document_chunks") \
-            .delete() \
+    # ========================================================
+    # DELETE CHUNKS
+    # ========================================================
+
+    try:
+        (
+            supabase
+            .table("document_chunks")
+            .delete()
             .eq(
                 "document_id",
                 document_id,
-            ) \
+            )
             .execute()
+        )
+    except Exception:
+        pass
 
-        document_delete = (
+    # ========================================================
+    # DELETE DOCUMENT
+    # ========================================================
+
+    try:
+        (
             supabase
             .table("documents")
             .delete()
@@ -730,39 +891,16 @@ async def delete_document(
             .execute()
         )
 
-        if not document_delete.data:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "Failed to delete "
-                    "document record."
-                ),
-            )
-
-        print(
-            f"[DELETE] "
-            f"Document={document_id} "
-            f"User={user.id}"
-        )
-
-        return {
-            "success": True,
-            "document_id": document_id,
-            "deleted": True,
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception as error:
-        print(
-            "Delete document error:",
-            error,
-        )
-
+    except Exception:
         raise HTTPException(
             status_code=500,
             detail=(
-                "Unable to delete document."
+                "Unable to delete the document."
             ),
         )
+
+    return {
+        "success": True,
+        "document_id": document_id,
+        "deleted": True,
+    }
