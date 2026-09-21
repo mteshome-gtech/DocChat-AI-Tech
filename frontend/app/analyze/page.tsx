@@ -3,7 +3,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
-
 import {
   ChangeEvent,
   useEffect,
@@ -11,7 +10,6 @@ import {
   useRef,
   useState,
 } from "react";
-
 import { createClient } from "@/lib/supabase/client";
 import { hasFeature, type Plan } from "@/lib/plans";
 
@@ -170,36 +168,24 @@ export default function AnalyzePage() {
 
   const [plan, setPlan] = useState<Plan>("free");
   const [loading, setLoading] = useState(true);
-
   const [analysisId, setAnalysisId] =
     useState("executive_summary");
-
   const [analysisOpen, setAnalysisOpen] =
     useState(false);
-
   const [search, setSearch] = useState("");
-
   const [document, setDocument] = useState("");
-
   const [uploadedDocuments, setUploadedDocuments] =
     useState<UploadedDocument[]>([]);
-
   const [savedDocuments, setSavedDocuments] =
     useState<SavedDocument[]>([]);
-
   const [loadingDocuments, setLoadingDocuments] =
     useState(true);
-
   const [selectedDocumentId, setSelectedDocumentId] =
     useState("");
-
   const [analyzing, setAnalyzing] =
     useState(false);
-
   const [result, setResult] = useState("");
-
   const [error, setError] = useState("");
-
   const [customPrompt, setCustomPrompt] =
     useState("");
 
@@ -375,6 +361,11 @@ export default function AnalyzePage() {
     }
 
     setError("");
+    setResult("");
+
+    const previousSelectedDocumentId =
+      selectedDocumentId;
+
     setSelectedDocumentId("");
     setDocument("uploaded");
 
@@ -403,7 +394,10 @@ export default function AnalyzePage() {
       }));
 
     setUploadedDocuments((current) => [
-      ...current,
+      ...current.filter(
+        (item) =>
+          item.id !== previousSelectedDocumentId
+      ),
       ...newDocuments,
     ]);
 
@@ -416,9 +410,22 @@ export default function AnalyzePage() {
     setError("");
     setResult("");
 
+    const previousSelectedDocumentId =
+      selectedDocumentId;
+
     if (!documentId) {
       setSelectedDocumentId("");
       setDocument("");
+
+      if (previousSelectedDocumentId) {
+        setUploadedDocuments((current) =>
+          current.filter(
+            (item) =>
+              item.id !== previousSelectedDocumentId
+          )
+        );
+      }
+
       return;
     }
 
@@ -437,6 +444,23 @@ export default function AnalyzePage() {
     setSelectedDocumentId(documentId);
     setDocument("documents");
 
+    setUploadedDocuments((current) =>
+      current.filter(
+        (item) =>
+          item.id !== previousSelectedDocumentId &&
+          item.id !== documentId
+      )
+    );
+
+    /*
+     * The saved document is now represented by
+     * selectedDocumentId and does NOT need to be
+     * downloaded into the browser for analysis.
+     *
+     * The backend retrieves it securely from
+     * Supabase Storage using the document_id.
+     */
+
     try {
       const {
         data: { session },
@@ -448,28 +472,15 @@ export default function AnalyzePage() {
         );
       }
 
-      let response: Response;
-
-      try {
-        response = await fetch(
-          `${API_URL}/upload/${documentId}/preview`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          }
-        );
-      } catch (networkError) {
-        console.error(
-          "Document preview network error:",
-          networkError
-        );
-
-        throw new Error(
-          `Unable to reach the DocChatAI API at ${API_URL}. Please verify your API URL and backend deployment.`
-        );
-      }
+      const response = await fetch(
+        `${API_URL}/upload/${documentId}/preview`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         let detail = "";
@@ -484,101 +495,38 @@ export default function AnalyzePage() {
             "";
         } catch {
           try {
-            detail =
-              await response.text();
+            detail = await response.text();
           } catch {
             detail = "";
           }
         }
 
-        throw new Error(
+        /*
+         * Preview failure should NOT clear the
+         * selectedDocumentId because Analyze can
+         * still retrieve the document directly
+         * from the backend.
+         */
+        setError(
           detail ||
-            `Unable to retrieve the selected document. Server returned ${response.status}.`
+            "The document was selected, but its preview could not be loaded. You can still analyze it."
         );
+
+        return;
       }
-
-      const previewData =
-        await response.json();
-
-      if (!previewData?.url) {
-        throw new Error(
-          "No document file was found."
-        );
-      }
-
-      let fileResponse: Response;
-
-      try {
-        fileResponse = await fetch(
-          previewData.url
-        );
-      } catch (networkError) {
-        console.error(
-          "Document download network error:",
-          networkError
-        );
-
-        throw new Error(
-          "Unable to download the selected document."
-        );
-      }
-
-      if (!fileResponse.ok) {
-        throw new Error(
-          `Unable to download the selected document. Server returned ${fileResponse.status}.`
-        );
-      }
-
-      const blob =
-        await fileResponse.blob();
-
-      const file = new File(
-        [blob],
-        savedDocument.file_name ||
-          savedDocument.name,
-        {
-          type:
-            savedDocument.file_type ||
-            blob.type ||
-            "application/octet-stream",
-        }
-      );
-
-      const selectedFile: UploadedDocument = {
-        id: savedDocument.id,
-        name:
-          savedDocument.file_name ||
-          savedDocument.name,
-        file,
-        status: "ready",
-      };
-
-      setUploadedDocuments((current) => {
-        const withoutExisting =
-          current.filter(
-            (item) =>
-              item.id !== savedDocument.id
-          );
-
-        return [
-          ...withoutExisting,
-          selectedFile,
-        ];
-      });
     } catch (err) {
       console.error(
-        "Saved document selection error:",
+        "Saved document preview error:",
         err
       );
 
+      /*
+       * Keep the document selected.
+       * Analysis does not depend on preview.
+       */
       setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to load the selected document."
+        "The document was selected, but its preview could not be loaded. You can still analyze it."
       );
-
-      setSelectedDocumentId("");
-      setDocument("");
     }
   }
 
@@ -599,7 +547,10 @@ export default function AnalyzePage() {
     setError("");
     setResult("");
 
-    if (!uploadedDocuments.length) {
+    if (
+      !uploadedDocuments.length &&
+      !selectedDocumentId
+    ) {
       setError(
         "Please select or upload at least one document."
       );
@@ -643,12 +594,39 @@ export default function AnalyzePage() {
         );
       }
 
+      /*
+       * Saved document:
+       * Send only its database ID.
+       *
+       * The backend securely retrieves the
+       * actual file from Supabase Storage.
+       */
+      if (selectedDocumentId) {
+        formData.append(
+          "document_id",
+          selectedDocumentId
+        );
+      }
+
+      /*
+       * Newly uploaded files:
+       * Send them directly.
+       *
+       * If a saved document is selected, don't
+       * accidentally send a browser-downloaded copy
+       * of that same saved document.
+       */
       uploadedDocuments.forEach(
         (uploadedDocument) => {
-          formData.append(
-            "files",
-            uploadedDocument.file
-          );
+          if (
+            uploadedDocument.id !==
+            selectedDocumentId
+          ) {
+            formData.append(
+              "files",
+              uploadedDocument.file
+            );
+          }
         }
       );
 
@@ -1014,6 +992,46 @@ export default function AnalyzePage() {
               />
             </label>
           </div>
+
+          {selectedDocumentId && (
+            <div className="mt-8 border border-blue-200 bg-blue-50 px-4 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-blue-600">
+                    Saved document selected
+                  </p>
+
+                  <p className="mt-1 text-sm font-medium text-slate-900">
+                    {savedDocuments.find(
+                      (item) =>
+                        item.id ===
+                        selectedDocumentId
+                    )?.name ||
+                      savedDocuments.find(
+                        (item) =>
+                          item.id ===
+                          selectedDocumentId
+                      )?.file_name ||
+                      "Selected document"}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Ready to analyze from your Documents library.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSavedDocumentSelect("")
+                  }
+                  className="ml-4 text-xs font-medium text-slate-500 transition hover:text-red-600"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          )}
 
           {uploadedDocuments.length > 0 && (
             <div className="mt-8">
@@ -1387,7 +1405,8 @@ function Reveal({
 
     observer.observe(element);
 
-    return () => observer.disconnect();
+    return () =>
+      observer.disconnect();
   }, []);
 
   return (

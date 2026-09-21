@@ -14,7 +14,11 @@ from fastapi import (
 )
 from google import genai
 
-from app.routes.upload import get_authenticated_user
+from app.routes.upload import (
+    get_authenticated_user,
+    supabase,
+    SUPABASE_STORAGE_BUCKET,
+)
 from app.services.rag import extract_text
 
 
@@ -28,6 +32,7 @@ router = APIRouter(
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
     "gemini-3.7-flash",
@@ -200,22 +205,23 @@ Documents:
 
 @router.post("")
 async def analyze_documents(
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] = File(default=[]),
     analysis_type: str = Form(...),
     custom_prompt: str | None = Form(default=None),
+    document_id: str | None = Form(default=None),
     authorization: str | None = Header(default=None),
 ):
     """
-    Analyze one or more uploaded PDF, DOCX, or TXT
-    documents with Gemini.
+    Analyze one or more newly uploaded documents and/or
+    an existing saved document from the user's Documents
+    library with Gemini.
     """
 
-    # Authenticate the user.
     user = get_authenticated_user(
         authorization
     )
 
-    if not files:
+    if not files and not document_id:
         raise HTTPException(
             status_code=400,
             detail="At least one document is required.",
@@ -231,13 +237,183 @@ async def analyze_documents(
     temporary_files: list[Path] = []
 
     try:
+        # -------------------------------------------------
+        # Process an existing saved document
+        # -------------------------------------------------
 
-        # -----------------------------------------
-        # Process uploaded documents
-        # -----------------------------------------
+        if document_id:
+            document_result = (
+                supabase
+                .table("documents")
+                .select(
+                    "id, user_id, name, file_name, "
+                    "file_type, storage_path, status"
+                )
+                .eq(
+                    "id",
+                    document_id,
+                )
+                .eq(
+                    "user_id",
+                    str(user.id),
+                )
+                .limit(1)
+                .execute()
+            )
+
+            saved_documents = (
+                document_result.data or []
+            )
+
+            if not saved_documents:
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        "The selected document was not "
+                        "found in your Documents."
+                    ),
+                )
+
+            saved_document = saved_documents[0]
+
+            storage_path = saved_document.get(
+                "storage_path"
+            )
+
+            if not storage_path:
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        "The selected document does not "
+                        "have an available stored file."
+                    ),
+                )
+
+            try:
+                saved_file_bytes = (
+                    supabase
+                    .storage
+                    .from_(
+                        SUPABASE_STORAGE_BUCKET
+                    )
+                    .download(
+                        storage_path
+                    )
+                )
+            except Exception as storage_error:
+                print(
+                    "Saved document download error:",
+                    storage_error,
+                )
+
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "Unable to retrieve the selected "
+                        "document from storage."
+                    ),
+                )
+
+            if not saved_file_bytes:
+                raise HTTPException(
+                    status_code=404,
+                    detail=(
+                        "The selected document file "
+                        "could not be retrieved."
+                    ),
+                )
+
+            saved_filename = (
+                saved_document.get("file_name")
+                or saved_document.get("name")
+                or "document"
+            )
+
+            saved_extension = Path(
+                saved_filename
+            ).suffix.lower()
+
+            if (
+                saved_extension
+                not in allowed_extensions
+            ):
+                saved_file_type = (
+                    saved_document.get("file_type")
+                    or ""
+                ).lower()
+
+                if saved_file_type in {
+                    "pdf",
+                    ".pdf",
+                }:
+                    saved_extension = ".pdf"
+
+                elif saved_file_type in {
+                    "docx",
+                    ".docx",
+                }:
+                    saved_extension = ".docx"
+
+                elif saved_file_type in {
+                    "txt",
+                    ".txt",
+                }:
+                    saved_extension = ".txt"
+
+            if (
+                saved_extension
+                not in allowed_extensions
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "The selected saved document "
+                        "is not a supported PDF, DOCX, "
+                        "or TXT file."
+                    ),
+                )
+
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=saved_extension,
+            ) as temp_file:
+                temp_path = Path(
+                    temp_file.name
+                )
+
+                temp_file.write(
+                    saved_file_bytes
+                )
+
+            temporary_files.append(
+                temp_path
+            )
+
+            saved_text = extract_text(
+                str(temp_path)
+            )
+
+            if not saved_text:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"No readable text was found "
+                        f"in {saved_filename}."
+                    ),
+                )
+
+            documents.append(
+                (
+                    saved_filename,
+                    saved_text,
+                )
+            )
+
+        # -------------------------------------------------
+        # Process newly uploaded documents
+        # -------------------------------------------------
 
         for file in files:
-
             if not file.filename:
                 raise HTTPException(
                     status_code=400,
@@ -261,10 +437,6 @@ async def analyze_documents(
                 file.filename
             ).name
 
-            # -----------------------------------------
-            # Save file temporarily
-            # -----------------------------------------
-
             with tempfile.NamedTemporaryFile(
                 delete=False,
                 suffix=extension,
@@ -275,7 +447,6 @@ async def analyze_documents(
                 )
 
                 while True:
-
                     chunk = await file.read(
                         1024 * 1024
                     )
@@ -283,15 +454,13 @@ async def analyze_documents(
                     if not chunk:
                         break
 
-                    temp_file.write(chunk)
+                    temp_file.write(
+                        chunk
+                    )
 
             temporary_files.append(
                 temp_path
             )
-
-            # -----------------------------------------
-            # Extract document text
-            # -----------------------------------------
 
             text = extract_text(
                 str(temp_path)
@@ -313,9 +482,18 @@ async def analyze_documents(
                 )
             )
 
-        # -----------------------------------------
+        if not documents:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No readable documents were "
+                    "available for analysis."
+                ),
+            )
+
+        # -------------------------------------------------
         # Build Gemini prompt
-        # -----------------------------------------
+        # -------------------------------------------------
 
         prompt = build_prompt(
             analysis_type=analysis_type,
@@ -323,38 +501,37 @@ async def analyze_documents(
             custom_prompt=custom_prompt,
         )
 
-        # -----------------------------------------
+        # -------------------------------------------------
         # Call Gemini with retry handling
-        # -----------------------------------------
+        # -------------------------------------------------
 
         response = None
         last_error = None
 
         for attempt in range(4):
-
             try:
-
                 print(
                     f"Gemini analysis attempt "
                     f"{attempt + 1}/4..."
                 )
 
-                response = client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=prompt,
+                response = (
+                    client.models.generate_content(
+                        model=GEMINI_MODEL,
+                        contents=prompt,
+                    )
                 )
 
                 break
 
             except Exception as error:
-
                 last_error = error
-
                 error_text = str(error)
 
                 is_retryable = (
                     "503" in error_text
-                    or "UNAVAILABLE" in error_text
+                    or "UNAVAILABLE"
+                    in error_text
                     or "429" in error_text
                     or "RESOURCE_EXHAUSTED"
                     in error_text
@@ -381,9 +558,9 @@ async def analyze_documents(
                 f"{last_error}"
             )
 
-        # -----------------------------------------
+        # -------------------------------------------------
         # Get Gemini result
-        # -----------------------------------------
+        # -------------------------------------------------
 
         result = response.text
 
@@ -395,9 +572,9 @@ async def analyze_documents(
                 ),
             )
 
-        # -----------------------------------------
+        # -------------------------------------------------
         # Return result to frontend
-        # -----------------------------------------
+        # -------------------------------------------------
 
         return {
             "success": True,
@@ -407,6 +584,7 @@ async def analyze_documents(
                 filename
                 for filename, _ in documents
             ],
+            "document_id": document_id,
             "user_id": str(user.id),
         }
 
@@ -414,7 +592,6 @@ async def analyze_documents(
         raise
 
     except Exception as error:
-
         print(
             "Analyze error:",
             error,
@@ -428,20 +605,15 @@ async def analyze_documents(
         )
 
     finally:
-
-        # -----------------------------------------
+        # -------------------------------------------------
         # Clean up temporary files
-        # -----------------------------------------
+        # -------------------------------------------------
 
         for temp_path in temporary_files:
-
             try:
-
                 if temp_path.exists():
                     temp_path.unlink()
-
             except Exception as cleanup_error:
-
                 print(
                     "Temporary file cleanup error:",
                     cleanup_error,
