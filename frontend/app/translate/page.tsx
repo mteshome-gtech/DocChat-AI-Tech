@@ -11,8 +11,7 @@ import React, {
 import { createClient } from "@/lib/supabase/client";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 type Language = {
   name: string;
@@ -111,7 +110,6 @@ function formatFileSize(bytes?: number): string {
   }
 
   const units = ["B", "KB", "MB", "GB"];
-
   const index = Math.min(
     Math.floor(Math.log(bytes) / Math.log(1024)),
     units.length - 1,
@@ -123,11 +121,7 @@ function formatFileSize(bytes?: number): string {
 }
 
 function getDocumentName(document: DocumentItem): string {
-  return (
-    document.file_name ||
-    document.name ||
-    "Untitled document"
-  );
+  return document.file_name || document.name || "Untitled document";
 }
 
 function getFriendlyError(
@@ -135,17 +129,11 @@ function getFriendlyError(
   data: any,
 ): string {
   if (response.status === 503) {
-    return (
-      "Translation is temporarily unavailable. " +
-      "Please try again shortly."
-    );
+    return "Translation is temporarily unavailable. Please try again shortly.";
   }
 
   if (response.status === 502) {
-    return (
-      "We couldn't complete this translation. " +
-      "Your original document was not changed."
-    );
+    return "We couldn't complete this translation. Your original document was not changed.";
   }
 
   if (response.status === 400) {
@@ -167,16 +155,38 @@ function getFriendlyError(
     return "The selected document could not be found.";
   }
 
+  return "Something went wrong while translating. Please try again.";
+}
+
+function FileIcon({
+  type,
+  large = false,
+}: {
+  type?: string;
+  large?: boolean;
+}) {
+  const isPdf = type?.toLowerCase().includes("pdf");
+
   return (
-    "Something went wrong while translating your document. " +
-    "Please try again."
+    <div
+      className={[
+        "relative flex shrink-0 items-center justify-center border border-black/10 bg-[#f2f0eb] text-[10px] font-bold tracking-[0.16em] text-black",
+        large ? "h-16 w-14" : "h-11 w-10",
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "absolute left-0 top-0 border-b border-r border-black/10 bg-white",
+          large ? "h-4 w-4" : "h-3 w-3",
+        ].join(" ")}
+      />
+      <span>{isPdf ? "PDF" : "TXT"}</span>
+    </div>
   );
 }
 
 export default function TranslatePage() {
-  const [mode, setMode] = useState<
-    "text" | "document"
-  >("document");
+  const [mode, setMode] = useState<"text" | "document">("document");
 
   const [sourceLanguage, setSourceLanguage] =
     useState("English");
@@ -186,8 +196,7 @@ export default function TranslatePage() {
 
   const [text, setText] = useState("");
 
-  const [file, setFile] =
-    useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(null);
 
   const [selectedDocument, setSelectedDocument] =
     useState<DocumentItem | null>(null);
@@ -201,9 +210,8 @@ export default function TranslatePage() {
   const [documentsError, setDocumentsError] =
     useState("");
 
-  const [sourceMode, setSourceMode] = useState<
-    "upload" | "library"
-  >("upload");
+  const [sourceMode, setSourceMode] =
+    useState<"upload" | "library">("upload");
 
   const [translating, setTranslating] =
     useState(false);
@@ -211,8 +219,7 @@ export default function TranslatePage() {
   const [translationStage, setTranslationStage] =
     useState("");
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
 
   const [result, setResult] =
     useState<TranslationResult | null>(null);
@@ -236,18 +243,13 @@ export default function TranslatePage() {
     [sourceLanguage],
   );
 
-  // ==========================================================
-  // AUTH
-  // ==========================================================
-
   async function getAccessToken(): Promise<string> {
     const supabase = createClient();
 
     const {
       data,
       error: sessionError,
-    } =
-      await supabase.auth.getSession();
+    } = await supabase.auth.getSession();
 
     if (
       sessionError ||
@@ -261,17 +263,12 @@ export default function TranslatePage() {
     return data.session.access_token;
   }
 
-  // ==========================================================
-  // LOAD MY DOCUMENTS
-  // ==========================================================
-
   async function loadDocuments() {
     setLoadingDocuments(true);
     setDocumentsError("");
 
     try {
-      const token =
-        await getAccessToken();
+      const token = await getAccessToken();
 
       const response = await fetch(
         `${API_BASE_URL}/upload/documents`,
@@ -283,10 +280,9 @@ export default function TranslatePage() {
         },
       );
 
-      const data =
-        await response.json().catch(
-          () => ({}),
-        );
+      const data = await response
+        .json()
+        .catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
@@ -296,12 +292,11 @@ export default function TranslatePage() {
         );
       }
 
-      const items =
-        Array.isArray(data)
-          ? data
-          : Array.isArray(data.documents)
-            ? data.documents
-            : [];
+      const items = Array.isArray(data)
+        ? data
+        : Array.isArray(data.documents)
+          ? data.documents
+          : [];
 
       setDocuments(items);
     } catch (err: any) {
@@ -314,17 +309,13 @@ export default function TranslatePage() {
     }
   }
 
-  // ==========================================================
-  // LOAD LIBRARY WHEN OPENED
-  // ==========================================================
-
   useEffect(() => {
     if (
       mode === "document" &&
       sourceMode === "library" &&
       libraryOpen
     ) {
-      loadDocuments();
+      void loadDocuments();
     }
   }, [
     mode,
@@ -332,37 +323,21 @@ export default function TranslatePage() {
     libraryOpen,
   ]);
 
-  // ==========================================================
-  // CLEAN LOCAL PREVIEW URL
-  // ==========================================================
-
   useEffect(() => {
     return () => {
       if (localPreviewUrl) {
-        URL.revokeObjectURL(
-          localPreviewUrl,
-        );
+        URL.revokeObjectURL(localPreviewUrl);
       }
     };
   }, [localPreviewUrl]);
 
-  // ==========================================================
-  // CLEAN LIBRARY PREVIEW URL
-  // ==========================================================
-
   useEffect(() => {
     return () => {
       if (libraryPreviewUrl) {
-        URL.revokeObjectURL(
-          libraryPreviewUrl,
-        );
+        URL.revokeObjectURL(libraryPreviewUrl);
       }
     };
   }, [libraryPreviewUrl]);
-
-  // ==========================================================
-  // LOAD SELECTED DOCUMENT PREVIEW
-  // ==========================================================
 
   useEffect(() => {
     let cancelled = false;
@@ -374,8 +349,7 @@ export default function TranslatePage() {
       }
 
       const fileType =
-        selectedDocument.file_type?.toLowerCase() ||
-        "";
+        selectedDocument.file_type?.toLowerCase() || "";
 
       if (!fileType.includes("pdf")) {
         setLibraryPreviewUrl(null);
@@ -383,8 +357,7 @@ export default function TranslatePage() {
       }
 
       try {
-        const token =
-          await getAccessToken();
+        const token = await getAccessToken();
 
         const response = await fetch(
           `${API_BASE_URL}/upload/${selectedDocument.id}/preview`,
@@ -396,10 +369,9 @@ export default function TranslatePage() {
           },
         );
 
-        const data =
-          await response.json().catch(
-            () => ({}),
-          );
+        const data = await response
+          .json()
+          .catch(() => ({}));
 
         if (
           !response.ok ||
@@ -409,9 +381,7 @@ export default function TranslatePage() {
         }
 
         if (!cancelled) {
-          setLibraryPreviewUrl(
-            data.url,
-          );
+          setLibraryPreviewUrl(data.url);
         }
       } catch {
         if (!cancelled) {
@@ -420,16 +390,12 @@ export default function TranslatePage() {
       }
     }
 
-    loadPreview();
+    void loadPreview();
 
     return () => {
       cancelled = true;
     };
   }, [selectedDocument]);
-
-  // ==========================================================
-  // FILE SELECTION
-  // ==========================================================
 
   function handleFileChange(
     event: ChangeEvent<HTMLInputElement>,
@@ -443,10 +409,7 @@ export default function TranslatePage() {
     setLibraryPreviewUrl(null);
 
     if (localPreviewUrl) {
-      URL.revokeObjectURL(
-        localPreviewUrl,
-      );
-
+      URL.revokeObjectURL(localPreviewUrl);
       setLocalPreviewUrl(null);
     }
 
@@ -463,18 +426,13 @@ export default function TranslatePage() {
 
     if (
       !extension ||
-      !["pdf", "txt"].includes(
-        extension,
-      )
+      !["pdf", "txt"].includes(extension)
     ) {
       setFile(null);
-
       setError(
         "Please select a PDF or TXT document.",
       );
-
       event.target.value = "";
-
       return;
     }
 
@@ -482,43 +440,27 @@ export default function TranslatePage() {
 
     if (extension === "pdf") {
       setLocalPreviewUrl(
-        URL.createObjectURL(
-          selected,
-        ),
+        URL.createObjectURL(selected),
       );
     }
   }
 
-  // ==========================================================
-  // SELECT EXISTING DOCUMENT
-  // ==========================================================
-
   function handleDocumentSelect(
     document: DocumentItem,
   ) {
-    setSelectedDocument(
-      document,
-    );
-
+    setSelectedDocument(document);
     setFile(null);
     setResult(null);
     setError("");
     setLibraryOpen(false);
 
     if (localPreviewUrl) {
-      URL.revokeObjectURL(
-        localPreviewUrl,
-      );
-
+      URL.revokeObjectURL(localPreviewUrl);
       setLocalPreviewUrl(null);
     }
 
     setLibraryPreviewUrl(null);
   }
-
-  // ==========================================================
-  // SWITCH SOURCE MODE
-  // ==========================================================
 
   function changeSourceMode(
     nextMode: "upload" | "library",
@@ -535,20 +477,13 @@ export default function TranslatePage() {
       setFile(null);
 
       if (localPreviewUrl) {
-        URL.revokeObjectURL(
-          localPreviewUrl,
-        );
-
+        URL.revokeObjectURL(localPreviewUrl);
         setLocalPreviewUrl(null);
       }
 
       setLibraryOpen(true);
     }
   }
-
-  // ==========================================================
-  // TRANSLATE TEXT
-  // ==========================================================
 
   async function handleTextTranslation(
     event: FormEvent,
@@ -559,73 +494,51 @@ export default function TranslatePage() {
     setResult(null);
 
     if (!text.trim()) {
-      setError(
-        "Please enter text to translate.",
-      );
+      setError("Please enter text to translate.");
       return;
     }
 
-    if (
-      sourceLanguage ===
-      targetLanguage
-    ) {
-      setError(
-        "Choose two different languages.",
-      );
+    if (sourceLanguage === targetLanguage) {
+      setError("Choose two different languages.");
       return;
     }
 
     setTranslating(true);
-
-    setTranslationStage(
-      "Translating your text…",
-    );
+    setTranslationStage("Translating your text...");
 
     try {
-      const token =
-        await getAccessToken();
+      const token = await getAccessToken();
 
-      const formData =
-        new FormData();
+      const formData = new FormData();
 
-      formData.append(
-        "text",
-        text,
-      );
-
+      formData.append("text", text);
       formData.append(
         "source_language",
         sourceLanguage,
       );
-
       formData.append(
         "target_language",
         targetLanguage,
       );
 
-      const response =
-        await fetch(
-          `${API_BASE_URL}/translate/text`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            body: formData,
+      const response = await fetch(
+        `${API_BASE_URL}/translate/text`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-        );
+          body: formData,
+        },
+      );
 
-      const data =
-        await response.json().catch(
-          () => ({}),
-        );
+      const data = await response
+        .json()
+        .catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
-          getFriendlyError(
-            response,
-            data,
-          ),
+          getFriendlyError(response, data),
         );
       }
 
@@ -640,10 +553,6 @@ export default function TranslatePage() {
       setTranslationStage("");
     }
   }
-
-  // ==========================================================
-  // TRANSLATE DOCUMENT
-  // ==========================================================
 
   async function handleDocumentTranslation(
     event: FormEvent,
@@ -660,44 +569,30 @@ export default function TranslatePage() {
       return;
     }
 
-    if (
-      file &&
-      selectedDocument
-    ) {
+    if (file && selectedDocument) {
       setError(
         "Choose either an uploaded document or a document from your library.",
       );
       return;
     }
 
-    if (
-      sourceLanguage ===
-      targetLanguage
-    ) {
-      setError(
-        "Choose two different languages.",
-      );
+    if (sourceLanguage === targetLanguage) {
+      setError("Choose two different languages.");
       return;
     }
 
     setTranslating(true);
-
     setTranslationStage(
-      "Preparing your document…",
+      "Preparing your document...",
     );
 
     try {
-      const token =
-        await getAccessToken();
+      const token = await getAccessToken();
 
-      const formData =
-        new FormData();
+      const formData = new FormData();
 
       if (file) {
-        formData.append(
-          "file",
-          file,
-        );
+        formData.append("file", file);
       }
 
       if (selectedDocument) {
@@ -723,41 +618,35 @@ export default function TranslatePage() {
       );
 
       setTranslationStage(
-        "Translating your document…",
+        "Translating your document...",
       );
 
-      const response =
-        await fetch(
-          `${API_BASE_URL}/translate/document`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            body: formData,
+      const response = await fetch(
+        `${API_BASE_URL}/translate/document`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-        );
+          body: formData,
+        },
+      );
 
-      const data =
-        await response.json().catch(
-          () => ({}),
-        );
+      const data = await response
+        .json()
+        .catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
-          getFriendlyError(
-            response,
-            data,
-          ),
+          getFriendlyError(response, data),
         );
       }
 
       setTranslationStage(
-        "Saving your translated document…",
+        "Saving your translated document...",
       );
 
       setResult(data);
-
       setTranslationStage(
         "Translation complete.",
       );
@@ -775,10 +664,6 @@ export default function TranslatePage() {
     }
   }
 
-  // ==========================================================
-  // RESET
-  // ==========================================================
-
   function resetTranslation() {
     setFile(null);
     setSelectedDocument(null);
@@ -788,17 +673,10 @@ export default function TranslatePage() {
     setLibraryPreviewUrl(null);
 
     if (localPreviewUrl) {
-      URL.revokeObjectURL(
-        localPreviewUrl,
-      );
-
+      URL.revokeObjectURL(localPreviewUrl);
       setLocalPreviewUrl(null);
     }
   }
-
-  // ==========================================================
-  // DOCUMENT PREVIEW
-  // ==========================================================
 
   const originalPreviewUrl =
     selectedDocument
@@ -810,597 +688,767 @@ export default function TranslatePage() {
     result?.download_url ||
     null;
 
-  // ==========================================================
-  // RENDER
-  // ==========================================================
+  const currentDocumentName =
+    file?.name ||
+    (selectedDocument
+      ? getDocumentName(selectedDocument)
+      : "");
 
   return (
-    <div className="min-h-screen bg-[#f7f0f6] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-8">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            AI Document Translation
-          </div>
+    <div className="min-h-screen bg-[#f3f1ed] text-[#111111]">
+      <div className="mx-auto w-full max-w-[1500px] px-5 py-8 sm:px-8 lg:px-12 lg:py-12">
+        {/* HEADER */}
 
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
-            Translate with confidence.
-          </h1>
-
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
-            Translate text and documents while preserving
-            the structure and visual character of your
-            original file.
-          </p>
-        </div>
-
-        <div className="mb-6 inline-flex rounded-2xl border border-white/80 bg-white/70 p-1 shadow-sm backdrop-blur">
-          <button
-            type="button"
-            onClick={() => {
-              setMode("document");
-              setError("");
-              setResult(null);
-            }}
-            className={`rounded-xl px-5 py-2.5 text-sm font-medium transition ${
-              mode === "document"
-                ? "bg-slate-900 text-white shadow-sm"
-                : "text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            Document Translation
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setMode("text");
-              setError("");
-              setResult(null);
-            }}
-            className={`rounded-xl px-5 py-2.5 text-sm font-medium transition ${
-              mode === "text"
-                ? "bg-slate-900 text-white shadow-sm"
-                : "text-slate-500 hover:text-slate-900"
-            }`}
-          >
-            Text Translation
-          </button>
-        </div>
-
-        <div className="rounded-[28px] border border-white/80 bg-white/80 p-5 shadow-[0_20px_70px_rgba(60,35,60,0.08)] backdrop-blur-xl sm:p-7">
-          <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-end">
+        <header className="mb-10 border-b border-black/10 pb-8">
+          <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                From
-              </label>
+              <div className="mb-5 flex items-center gap-3">
+                <div className="h-2 w-2 bg-black" />
+
+                <span className="text-[10px] font-bold uppercase tracking-[0.28em] text-black/50">
+                  DOCCHATAI / TRANSLATE
+                </span>
+              </div>
+
+              <h1 className="max-w-4xl text-[42px] font-medium leading-[0.95] tracking-[-0.045em] sm:text-6xl lg:text-[76px]">
+                Translation,
+                <br />
+                <span className="text-black/35">
+                  precisely delivered.
+                </span>
+              </h1>
+
+              <p className="mt-6 max-w-xl text-sm leading-6 text-black/55 sm:text-base">
+                Translate documents and text while
+                maintaining the character of the
+                original material.
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center border border-black/10 bg-white">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("document");
+                  setError("");
+                  setResult(null);
+                }}
+                className={[
+                  "border-r border-black/10 px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] transition",
+                  mode === "document"
+                    ? "bg-black text-white"
+                    : "text-black/45 hover:bg-black/[0.03]",
+                ].join(" ")}
+              >
+                Documents
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("text");
+                  setError("");
+                  setResult(null);
+                }}
+                className={[
+                  "px-5 py-3 text-[11px] font-bold uppercase tracking-[0.16em] transition",
+                  mode === "text"
+                    ? "bg-black text-white"
+                    : "text-black/45 hover:bg-black/[0.03]",
+                ].join(" ")}
+              >
+                Text
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* LANGUAGE BAR */}
+
+        <section className="mb-6 border border-black/10 bg-white">
+          <div className="grid md:grid-cols-[1fr_90px_1fr]">
+            <div className="border-b border-black/10 p-6 md:border-b-0 md:border-r">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/40">
+                  Source language
+                </span>
+
+                <span className="text-[10px] font-mono text-black/25">
+                  01
+                </span>
+              </div>
 
               <select
                 value={sourceLanguage}
                 onChange={(event) =>
-                  setSourceLanguage(
-                    event.target.value,
-                  )
+                  setSourceLanguage(event.target.value)
                 }
                 disabled={translating}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100 disabled:opacity-60"
                 dir={
                   selectedSourceIsRTL
                     ? "rtl"
                     : "ltr"
                 }
+                className="w-full appearance-none border-0 bg-transparent p-0 text-2xl font-medium tracking-tight outline-none"
               >
-                {LANGUAGES.map(
-                  (language) => (
-                    <option
-                      key={language.code}
-                      value={
-                        language.code
-                      }
-                    >
-                      {language.name}
-                    </option>
-                  ),
-                )}
+                {LANGUAGES.map((language) => (
+                  <option
+                    key={language.code}
+                    value={language.code}
+                  >
+                    {language.name}
+                  </option>
+                ))}
               </select>
             </div>
 
-            <div className="hidden h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 md:flex">
-              →
+            <div className="hidden items-center justify-center border-b border-black/10 md:flex md:border-b-0 md:border-r">
+              <div className="flex h-10 w-10 items-center justify-center border border-black/10 bg-[#f3f1ed] text-sm">
+                →
+              </div>
             </div>
 
-            <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                To
-              </label>
+            <div className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/40">
+                  Target language
+                </span>
+
+                <span className="text-[10px] font-mono text-black/25">
+                  02
+                </span>
+              </div>
 
               <select
                 value={targetLanguage}
                 onChange={(event) =>
-                  setTargetLanguage(
-                    event.target.value,
-                  )
+                  setTargetLanguage(event.target.value)
                 }
                 disabled={translating}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100 disabled:opacity-60"
                 dir={
                   selectedTargetIsRTL
                     ? "rtl"
                     : "ltr"
                 }
+                className="w-full appearance-none border-0 bg-transparent p-0 text-2xl font-medium tracking-tight outline-none"
               >
-                {LANGUAGES.map(
-                  (language) => (
-                    <option
-                      key={language.code}
-                      value={
-                        language.code
-                      }
-                    >
-                      {language.name}
-                    </option>
-                  ),
-                )}
+                {LANGUAGES.map((language) => (
+                  <option
+                    key={language.code}
+                    value={language.code}
+                  >
+                    {language.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
+        </section>
 
-          {mode === "text" && (
-            <form
-              onSubmit={
-                handleTextTranslation
-              }
-              className="mt-7"
-            >
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                Text
-              </label>
+        {/* TEXT TRANSLATION */}
 
-              <textarea
-                value={text}
-                onChange={(event) =>
-                  setText(
-                    event.target.value,
-                  )
-                }
-                placeholder="Enter or paste the text you want to translate…"
-                disabled={translating}
-                dir={
-                  selectedSourceIsRTL
-                    ? "rtl"
-                    : "ltr"
-                }
-                className="min-h-[280px] w-full resize-y rounded-2xl border border-slate-200 bg-white p-5 text-sm leading-7 outline-none transition placeholder:text-slate-300 focus:border-slate-400 focus:ring-4 focus:ring-slate-100 disabled:opacity-60"
-              />
+        {mode === "text" && (
+          <form
+            onSubmit={handleTextTranslation}
+            className="border border-black/10 bg-white"
+          >
+            <div className="grid lg:grid-cols-2">
+              <div className="border-b border-black/10 lg:border-b-0 lg:border-r">
+                <div className="flex h-14 items-center justify-between border-b border-black/10 px-5">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/40">
+                    Original
+                  </span>
 
-              {error && (
-                <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {error}
+                  <span className="text-[10px] font-mono text-black/30">
+                    {text.length.toLocaleString()} CHARS
+                  </span>
                 </div>
-              )}
 
-              <div className="mt-5 flex items-center justify-between gap-4">
-                <span className="text-xs text-slate-400">
-                  {text.length.toLocaleString()} characters
-                </span>
-
-                <button
-                  type="submit"
-                  disabled={
-                    translating ||
-                    !text.trim()
+                <textarea
+                  value={text}
+                  onChange={(event) =>
+                    setText(event.target.value)
                   }
-                  className="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/10 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {translating
-                    ? "Translating…"
-                    : "Translate Text"}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {mode === "document" && (
-            <div className="mt-7">
-              <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100/80 p-1">
-                <button
-                  type="button"
+                  placeholder="Start writing or paste your text..."
                   disabled={translating}
-                  onClick={() =>
-                    changeSourceMode(
-                      "upload",
-                    )
+                  dir={
+                    selectedSourceIsRTL
+                      ? "rtl"
+                      : "ltr"
                   }
-                  className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                    sourceMode === "upload"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  Upload Document
-                </button>
-
-                <button
-                  type="button"
-                  disabled={translating}
-                  onClick={() =>
-                    changeSourceMode(
-                      "library",
-                    )
-                  }
-                  className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                    sourceMode === "library"
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  My Documents
-                </button>
+                  className="min-h-[500px] w-full resize-none border-0 bg-white p-7 text-lg leading-8 outline-none placeholder:text-black/20"
+                />
               </div>
+
+              <div>
+                <div className="flex h-14 items-center justify-between border-b border-black/10 px-5">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/40">
+                    Translation
+                  </span>
+
+                  <span className="text-[10px] font-mono text-black/30">
+                    {targetLanguage.toUpperCase()}
+                  </span>
+                </div>
+
+                <div
+                  dir={
+                    selectedTargetIsRTL
+                      ? "rtl"
+                      : "ltr"
+                  }
+                  className="min-h-[500px] whitespace-pre-wrap p-7 text-lg leading-8"
+                >
+                  {translating ? (
+                    <div className="flex h-[430px] items-center justify-center">
+                      <div className="text-center">
+                        <div className="mx-auto mb-5 h-8 w-8 animate-spin border-2 border-black/10 border-t-black" />
+
+                        <p className="text-sm font-medium">
+                          Translating...
+                        </p>
+
+                        <p className="mt-2 text-xs text-black/35">
+                          {translationStage}
+                        </p>
+                      </div>
+                    </div>
+                  ) : result?.translated_text ? (
+                    result.translated_text
+                  ) : (
+                    <span className="text-black/20">
+                      Your translated text will appear here.
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="border-t border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-4 border-t border-black/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-black/35">
+                Translation powered by DocChatAI.
+              </p>
+
+              <button
+                type="submit"
+                disabled={
+                  translating ||
+                  !text.trim()
+                }
+                className="bg-black px-7 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-white transition hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                {translating
+                  ? "Translating..."
+                  : "Translate Text →"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* DOCUMENT TRANSLATION */}
+
+        {mode === "document" && (
+          <>
+            <section className="border border-black/10 bg-white">
+              {/* SOURCE HEADER */}
+
+              <div className="flex flex-col border-b border-black/10 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex h-16 items-center border-b border-black/10 px-6 lg:border-b-0">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/40">
+                    Source document
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 lg:flex">
+                  <button
+                    type="button"
+                    disabled={translating}
+                    onClick={() =>
+                      changeSourceMode("upload")
+                    }
+                    className={[
+                      "border-r border-black/10 px-6 py-5 text-[10px] font-bold uppercase tracking-[0.18em] transition",
+                      sourceMode === "upload"
+                        ? "bg-black text-white"
+                        : "text-black/40 hover:bg-black/[0.03]",
+                    ].join(" ")}
+                  >
+                    Upload
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={translating}
+                    onClick={() =>
+                      changeSourceMode("library")
+                    }
+                    className={[
+                      "px-6 py-5 text-[10px] font-bold uppercase tracking-[0.18em] transition",
+                      sourceMode === "library"
+                        ? "bg-black text-white"
+                        : "text-black/40 hover:bg-black/[0.03]",
+                    ].join(" ")}
+                  >
+                    My Documents
+                  </button>
+                </div>
+              </div>
+
+              {/* UPLOAD */}
 
               {sourceMode === "upload" && (
-                <div>
-                  <label
-                    htmlFor="document-upload"
-                    className={`group flex min-h-[190px] cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-white/70 px-6 text-center transition hover:border-slate-400 hover:bg-white ${
-                      translating
-                        ? "pointer-events-none opacity-60"
-                        : ""
-                    }`}
-                  >
-                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl transition group-hover:scale-105">
-                      ↑
+                <div className="grid lg:grid-cols-[1fr_1fr]">
+                  <div className="border-b border-black/10 p-6 lg:border-b-0 lg:border-r lg:p-8">
+                    <label
+                      htmlFor="document-upload"
+                      className={[
+                        "group flex min-h-[360px] cursor-pointer flex-col items-center justify-center border border-dashed border-black/20 bg-[#f7f6f3] px-8 text-center transition hover:border-black/40 hover:bg-[#f2f0eb]",
+                        translating
+                          ? "pointer-events-none opacity-50"
+                          : "",
+                      ].join(" ")}
+                    >
+                      <div className="mb-7 flex h-20 w-20 items-center justify-center border border-black/10 bg-white text-3xl font-light transition group-hover:-translate-y-1">
+                        +
+                      </div>
+
+                      <p className="text-xl font-medium tracking-tight">
+                        {file
+                          ? file.name
+                          : "Drop your document here"}
+                      </p>
+
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-black/35">
+                        PDF or TXT
+                      </p>
+
+                      {file && (
+                        <div className="mt-5 border border-black/10 bg-white px-4 py-2 text-xs font-mono text-black/50">
+                          {formatFileSize(file.size)}
+                        </div>
+                      )}
+
+                      <input
+                        id="document-upload"
+                        type="file"
+                        accept=".pdf,.txt,application/pdf,text/plain"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        disabled={translating}
+                      />
+                    </label>
+                  </div>
+
+                  {/* UPLOAD PREVIEW */}
+
+                  <div className="bg-[#ebe9e4] p-6 lg:p-8">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/40">
+                          Document preview
+                        </p>
+
+                        <p className="mt-2 max-w-[300px] truncate text-sm font-medium">
+                          {file?.name ||
+                            "No document selected"}
+                        </p>
+                      </div>
+
+                      <span className="text-[9px] font-mono text-black/30">
+                        ORIGINAL
+                      </span>
                     </div>
 
-                    <p className="text-sm font-semibold text-slate-800">
-                      {file
-                        ? file.name
-                        : "Choose a document"}
-                    </p>
+                    {originalPreviewUrl &&
+                    file?.name
+                      .toLowerCase()
+                      .endsWith(".pdf") ? (
+                      <iframe
+                        src={originalPreviewUrl}
+                        title="Original document preview"
+                        className="h-[470px] w-full border border-black/10 bg-white"
+                      />
+                    ) : (
+                      <div className="flex h-[470px] items-center justify-center border border-black/10 bg-white">
+                        <div className="text-center">
+                          <FileIcon
+                            type={file?.name}
+                            large
+                          />
 
-                    <p className="mt-1 text-xs text-slate-400">
-                      PDF or TXT
-                    </p>
+                          <p className="mt-5 text-sm font-medium">
+                            {file
+                              ? "Text document ready"
+                              : "Preview unavailable"}
+                          </p>
 
-                    {file && (
-                      <p className="mt-2 text-xs text-slate-400">
-                        {formatFileSize(
-                          file.size,
-                        )}
-                      </p>
+                          <p className="mt-2 text-xs text-black/35">
+                            {file
+                              ? "TXT files do not require visual preview."
+                              : "Select a PDF to preview it here."}
+                          </p>
+                        </div>
+                      </div>
                     )}
-
-                    <input
-                      id="document-upload"
-                      type="file"
-                      accept=".pdf,.txt,application/pdf,text/plain"
-                      onChange={
-                        handleFileChange
-                      }
-                      className="hidden"
-                      disabled={
-                        translating
-                      }
-                    />
-                  </label>
+                  </div>
                 </div>
               )}
 
+              {/* LIBRARY */}
+
               {sourceMode === "library" && (
-                <div>
-                  {!selectedDocument && (
+                <div className="p-6 lg:p-8">
+                  {!selectedDocument ? (
                     <button
                       type="button"
                       onClick={() =>
-                        setLibraryOpen(
-                          true,
-                        )
+                        setLibraryOpen(true)
                       }
-                      disabled={
-                        translating
-                      }
-                      className="flex min-h-[190px] w-full flex-col items-center justify-center rounded-[24px] border border-slate-200 bg-white/70 px-6 text-center transition hover:border-slate-300 hover:bg-white disabled:opacity-60"
+                      disabled={translating}
+                      className="group flex min-h-[260px] w-full flex-col items-center justify-center border border-black/10 bg-[#f7f6f3] transition hover:border-black/30 hover:bg-[#f2f0eb]"
                     >
-                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f5e9f1] text-xl">
-                        ▣
+                      <div className="mb-6 flex h-16 w-16 items-center justify-center border border-black/10 bg-white transition group-hover:-translate-y-1">
+                        <span className="text-xl">
+                          □
+                        </span>
                       </div>
 
-                      <p className="text-sm font-semibold text-slate-800">
-                        Select from My Documents
+                      <p className="text-xl font-medium tracking-tight">
+                        Choose from My Documents
                       </p>
 
-                      <p className="mt-1 text-xs text-slate-400">
-                        Choose a document you've already uploaded
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-black/35">
+                        Browse your document library
                       </p>
                     </button>
-                  )}
+                  ) : (
+                    <div className="grid lg:grid-cols-[0.85fr_1.15fr]">
+                      <div className="border border-black/10 bg-[#f7f6f3] p-6">
+                        <div className="flex items-start justify-between gap-5">
+                          <div className="flex items-start gap-4">
+                            <FileIcon
+                              type={
+                                selectedDocument.file_type
+                              }
+                              large
+                            />
 
-                  {selectedDocument && (
-                    <div className="flex items-center justify-between gap-4 rounded-[24px] border border-slate-200 bg-white p-5">
-                      <div className="flex min-w-0 items-center gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xs font-bold uppercase text-slate-500">
-                          {selectedDocument.file_type?.includes(
-                            "pdf",
-                          )
-                            ? "PDF"
-                            : "TXT"}
+                            <div className="min-w-0">
+                              <p className="break-words text-lg font-medium tracking-tight">
+                                {getDocumentName(
+                                  selectedDocument,
+                                )}
+                              </p>
+
+                              <p className="mt-3 text-xs font-mono text-black/35">
+                                {formatFileSize(
+                                  selectedDocument.file_size,
+                                )}
+
+                                {selectedDocument.word_count
+                                  ? `  /  ${selectedDocument.word_count.toLocaleString()} WORDS`
+                                  : ""}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDocument(null);
+                              setLibraryPreviewUrl(null);
+                              setResult(null);
+                            }}
+                            className="border border-black/10 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.15em] text-black/45 hover:bg-white"
+                          >
+                            Change
+                          </button>
                         </div>
 
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-800">
-                            {getDocumentName(
-                              selectedDocument,
-                            )}
+                        <div className="mt-10 border-t border-black/10 pt-5">
+                          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-black/30">
+                            Ready for translation
                           </p>
 
-                          <p className="mt-1 text-xs text-slate-400">
-                            {formatFileSize(
-                              selectedDocument.file_size,
-                            )}
+                          <p className="mt-3 text-sm leading-6 text-black/55">
+                            The original file will remain
+                            unchanged. A translated copy
+                            will be saved separately.
                           </p>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedDocument(
-                            null,
-                          );
-                          setResult(null);
-                          setLibraryPreviewUrl(
-                            null,
-                          );
-                        }}
-                        disabled={
-                          translating
-                        }
-                        className="shrink-0 rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      >
-                        Change
-                      </button>
+                      <div className="border border-l-0 border-black/10 bg-[#ebe9e4] p-5">
+                        <div className="mb-4 flex items-center justify-between">
+                          <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/40">
+                            Original preview
+                          </p>
+
+                          <span className="text-[9px] font-mono text-black/30">
+                            PDF
+                          </span>
+                        </div>
+
+                        {libraryPreviewUrl ? (
+                          <iframe
+                            src={libraryPreviewUrl}
+                            title="Selected document preview"
+                            className="h-[480px] w-full border border-black/10 bg-white"
+                          />
+                        ) : (
+                          <div className="flex h-[480px] items-center justify-center border border-black/10 bg-white">
+                            <div className="text-center">
+                              <FileIcon
+                                type={
+                                  selectedDocument.file_type
+                                }
+                                large
+                              />
+
+                              <p className="mt-5 text-sm font-medium">
+                                Preview unavailable
+                              </p>
+
+                              <p className="mt-2 text-xs text-black/35">
+                                This document can still be
+                                translated.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {libraryOpen &&
-                sourceMode ===
-                  "library" && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
-                    <div className="max-h-[80vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/80 bg-white shadow-2xl">
-                      <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-                        <div>
-                          <h2 className="text-lg font-semibold text-slate-900">
-                            My Documents
-                          </h2>
+              {/* LIBRARY MODAL */}
 
-                          <p className="mt-1 text-xs text-slate-400">
-                            Select the document you want to translate.
-                          </p>
+              {libraryOpen &&
+                sourceMode === "library" && (
+                  <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+                    <div className="flex min-h-full items-center justify-center p-4">
+                      <div className="flex max-h-[90vh] w-full max-w-6xl flex-col border border-white/20 bg-[#f3f1ed] shadow-2xl">
+                        <div className="flex shrink-0 items-center justify-between border-b border-black/10 bg-white px-6 py-6 lg:px-8">
+                          <div>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/35">
+                              DOCUMENT LIBRARY
+                            </p>
+
+                            <h2 className="mt-2 text-3xl font-medium tracking-[-0.03em]">
+                              My Documents
+                            </h2>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLibraryOpen(false)
+                            }
+                            className="flex h-11 w-11 items-center justify-center border border-black/10 bg-white text-xl hover:bg-black hover:text-white"
+                          >
+                            ×
+                          </button>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setLibraryOpen(
-                              false,
-                            )
-                          }
-                          className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
-                        >
-                          ×
-                        </button>
-                      </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto p-5 lg:p-8">
+                          {loadingDocuments && (
+                            <div className="flex min-h-[400px] items-center justify-center">
+                              <div className="text-center">
+                                <div className="mx-auto mb-6 h-8 w-8 animate-spin border-2 border-black/10 border-t-black" />
 
-                      <div className="max-h-[55vh] overflow-y-auto p-4">
-                        {loadingDocuments && (
-                          <div className="py-12 text-center">
-                            <div className="mx-auto mb-4 h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-slate-800" />
-
-                            <p className="text-sm text-slate-500">
-                              Loading your documents…
-                            </p>
-                          </div>
-                        )}
-
-                        {!loadingDocuments &&
-                          documentsError && (
-                            <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
-                              {documentsError}
-
-                              <button
-                                type="button"
-                                onClick={
-                                  loadDocuments
-                                }
-                                className="ml-2 font-semibold underline"
-                              >
-                                Retry
-                              </button>
-                            </div>
-                          )}
-
-                        {!loadingDocuments &&
-                          !documentsError &&
-                          documents.length ===
-                            0 && (
-                            <div className="py-12 text-center">
-                              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
-                                ▣
+                                <p className="text-sm font-medium">
+                                  Loading your library...
+                                </p>
                               </div>
-
-                              <p className="text-sm font-semibold text-slate-800">
-                                No documents yet
-                              </p>
-
-                              <p className="mt-1 text-xs text-slate-400">
-                                Upload a document first, then you'll be able to select it here.
-                              </p>
                             </div>
                           )}
 
-                        {!loadingDocuments &&
-                          !documentsError &&
-                          documents.length >
-                            0 && (
-                            <div className="space-y-2">
-                              {documents
-                                .filter(
-                                  (
-                                    document,
-                                  ) =>
-                                    document.status !==
-                                    "processing",
-                                )
-                                .map(
-                                  (
-                                    document,
-                                  ) => (
+                          {!loadingDocuments &&
+                            documentsError && (
+                              <div className="border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+                                <p>
+                                  {documentsError}
+                                </p>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void loadDocuments()
+                                  }
+                                  className="mt-4 border border-red-200 bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em]"
+                                >
+                                  Retry
+                                </button>
+                              </div>
+                            )}
+
+                          {!loadingDocuments &&
+                            !documentsError &&
+                            documents.length === 0 && (
+                              <div className="flex min-h-[400px] items-center justify-center">
+                                <div className="text-center">
+                                  <div className="mx-auto flex h-16 w-16 items-center justify-center border border-black/10 bg-white text-2xl">
+                                    □
+                                  </div>
+
+                                  <h3 className="mt-6 text-xl font-medium">
+                                    Your library is empty
+                                  </h3>
+
+                                  <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-black/40">
+                                    Upload your first document
+                                    and it will appear here.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                          {!loadingDocuments &&
+                            !documentsError &&
+                            documents.length > 0 && (
+                              <div className="grid gap-px border border-black/10 bg-black/10 sm:grid-cols-2 lg:grid-cols-3">
+                                {documents
+                                  .filter(
+                                    (document) =>
+                                      document.status !==
+                                      "processing",
+                                  )
+                                  .map((document) => (
                                     <button
                                       type="button"
-                                      key={
-                                        document.id
-                                      }
+                                      key={document.id}
                                       onClick={() =>
                                         handleDocumentSelect(
                                           document,
                                         )
                                       }
-                                      className="flex w-full items-center gap-4 rounded-2xl border border-transparent p-4 text-left transition hover:border-slate-200 hover:bg-slate-50"
+                                      className="group bg-white p-6 text-left transition hover:bg-[#f7f6f3]"
                                     >
-                                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-[10px] font-bold uppercase text-slate-500">
-                                        {document.file_type?.includes(
-                                          "pdf",
-                                        )
-                                          ? "PDF"
-                                          : "TXT"}
+                                      <div className="flex items-start justify-between">
+                                        <FileIcon
+                                          type={
+                                            document.file_type
+                                          }
+                                        />
+
+                                        <span className="text-lg text-black/20 transition group-hover:translate-x-1 group-hover:text-black">
+                                          →
+                                        </span>
                                       </div>
 
-                                      <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-semibold text-slate-800">
-                                          {getDocumentName(
-                                            document,
-                                          )}
-                                        </p>
+                                      <p className="mt-8 min-h-[48px] break-words text-base font-medium leading-6">
+                                        {getDocumentName(
+                                          document,
+                                        )}
+                                      </p>
 
-                                        <p className="mt-1 text-xs text-slate-400">
+                                      <div className="mt-6 flex items-center gap-3 text-[9px] font-mono uppercase tracking-[0.1em] text-black/30">
+                                        <span>
                                           {formatFileSize(
                                             document.file_size,
                                           )}
+                                        </span>
 
-                                          {document.word_count
-                                            ? ` · ${document.word_count.toLocaleString()} words`
-                                            : ""}
-                                        </p>
+                                        {document.word_count ? (
+                                          <>
+                                            <span>
+                                              /
+                                            </span>
+
+                                            <span>
+                                              {document.word_count.toLocaleString()}{" "}
+                                              WORDS
+                                            </span>
+                                          </>
+                                        ) : null}
                                       </div>
-
-                                      <span className="text-slate-300">
-                                        →
-                                      </span>
                                     </button>
-                                  ),
-                                )}
-                            </div>
-                          )}
+                                  ))}
+                              </div>
+                            )}
+                        </div>
+
+                        <div className="flex shrink-0 items-center justify-between border-t border-black/10 bg-white px-6 py-4 lg:px-8">
+                          <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-black/30">
+                            {documents.length} DOCUMENT
+                            {documents.length === 1
+                              ? ""
+                              : "S"}
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setLibraryOpen(false)
+                            }
+                            className="border border-black/10 px-5 py-3 text-[9px] font-bold uppercase tracking-[0.18em] hover:bg-black hover:text-white"
+                          >
+                            Close
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-              {(file ||
-                selectedDocument) && (
-                <div className="mt-5 overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50">
-                  <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                        Original
-                      </p>
-
-                      <p className="mt-1 max-w-[300px] truncate text-sm font-medium text-slate-700">
-                        {file
-                          ? file.name
-                          : selectedDocument
-                            ? getDocumentName(
-                                selectedDocument,
-                              )
-                            : ""}
-                      </p>
-                    </div>
-                  </div>
-
-                  {originalPreviewUrl &&
-                    (
-                      file?.name
-                        .toLowerCase()
-                        .endsWith(".pdf") ||
-                      selectedDocument?.file_type?.includes(
-                        "pdf",
-                      )
-                    ) && (
-                      <iframe
-                        src={
-                          originalPreviewUrl
-                        }
-                        title="Original document preview"
-                        className="h-[420px] w-full bg-slate-100"
-                      />
-                    )}
-
-                  {file &&
-                    file.name
-                      .toLowerCase()
-                      .endsWith(".txt") && (
-                      <div className="p-6">
-                        <p className="text-xs text-slate-400">
-                          Text document ready for translation.
-                        </p>
-                      </div>
-                    )}
-
-                  {selectedDocument &&
-                    selectedDocument.file_type
-                      ?.toLowerCase()
-                      .includes("txt") && (
-                      <div className="p-6">
-                        <p className="text-xs text-slate-400">
-                          Text document ready for translation.
-                        </p>
-                      </div>
-                    )}
-                </div>
-              )}
+              {/* ERROR */}
 
               {error && (
-                <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div className="border-t border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">
                   {error}
                 </div>
               )}
 
+              {/* PROCESSING */}
+
               {translating && (
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-800" />
+                <div className="border-t border-black/10 bg-black px-6 py-7 text-white lg:px-8">
+                  <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+                    <div className="relative flex h-12 w-12 shrink-0 items-center justify-center border border-white/20">
+                      <div className="h-5 w-5 animate-spin border-2 border-white/20 border-t-white" />
+                    </div>
 
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">
+                      <p className="text-lg font-medium tracking-tight">
                         {translationStage ||
-                          "Working on your document…"}
+                          "Processing your document..."}
                       </p>
 
-                      <p className="mt-1 text-xs text-slate-400">
-                        Please keep this page open while the document is being processed.
+                      <p className="mt-2 text-xs text-white/40">
+                        Please keep this page open while
+                        the document is being processed.
                       </p>
+                    </div>
+
+                    <div className="sm:ml-auto">
+                      <div className="h-1 w-32 overflow-hidden bg-white/10">
+                        <div className="h-full w-1/2 animate-pulse bg-white" />
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs leading-5 text-slate-400">
-                  Your translated document will be saved
-                  to My Documents automatically.
-                </p>
+              {/* ACTION BAR */}
+
+              <div className="flex flex-col gap-5 border-t border-black/10 p-5 lg:flex-row lg:items-center lg:justify-between lg:px-8 lg:py-6">
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-black/30">
+                    Output
+                  </p>
+
+                  <p className="mt-2 text-sm text-black/55">
+                    Translated copies are automatically
+                    saved to My Documents.
+                  </p>
+                </div>
 
                 <div className="flex gap-2">
                   {(file ||
@@ -1408,13 +1456,9 @@ export default function TranslatePage() {
                     result) && (
                     <button
                       type="button"
-                      onClick={
-                        resetTranslation
-                      }
-                      disabled={
-                        translating
-                      }
-                      className="rounded-2xl px-5 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+                      onClick={resetTranslation}
+                      disabled={translating}
+                      className="border border-black/10 px-5 py-4 text-[10px] font-bold uppercase tracking-[0.18em] text-black/50 transition hover:bg-black hover:text-white disabled:opacity-30"
                     >
                       Reset
                     </button>
@@ -1422,117 +1466,193 @@ export default function TranslatePage() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      void handleDocumentTranslation(
-                        {
-                          preventDefault:
-                            () => {},
-                        } as FormEvent,
-                      );
-                    }}
+                    onClick={() =>
+                      void handleDocumentTranslation({
+                        preventDefault: () => {},
+                      } as FormEvent)
+                    }
                     disabled={
                       translating ||
-                      (!file &&
-                        !selectedDocument)
+                      (!file && !selectedDocument)
                     }
-                    className="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/10 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="bg-black px-7 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-white transition hover:bg-black/80 disabled:cursor-not-allowed disabled:opacity-25"
                   >
                     {translating
-                      ? "Translating…"
-                      : "Translate Document"}
+                      ? "Translating..."
+                      : "Translate Document →"}
                   </button>
                 </div>
               </div>
+            </section>
 
-              {result?.success && (
-                <div className="mt-7 overflow-hidden rounded-[24px] border border-emerald-100 bg-emerald-50/60">
-                  <div className="flex flex-col gap-4 border-b border-emerald-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                        ✓
-                      </div>
+            {/* RESULT */}
 
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          Translation complete
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          Your translated document has been saved to My Documents.
-                        </p>
-                      </div>
+            {result?.success && (
+              <section className="mt-6 border border-black/10 bg-white">
+                <div className="flex flex-col border-b border-black/10 lg:flex-row">
+                  <div className="flex flex-1 items-start gap-5 p-6 lg:p-8">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-black bg-black text-lg text-white">
+                      ✓
                     </div>
 
-                    <div className="flex gap-2">
-                      {translatedPreviewUrl && (
-                        <a
-                          href={
-                            translatedPreviewUrl
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-xl bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50"
-                        >
-                          Preview
-                        </a>
-                      )}
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/35">
+                        TRANSLATION COMPLETE
+                      </p>
 
-                      {result.download_url && (
-                        <a
-                          href={
-                            result.download_url
-                          }
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                          className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800"
-                        >
-                          Download
-                        </a>
-                      )}
+                      <h2 className="mt-2 text-2xl font-medium tracking-tight">
+                        Your translated document is ready.
+                      </h2>
+
+                      <p className="mt-3 text-sm leading-6 text-black/45">
+                        {result.filename ||
+                          "Translated document"}
+                      </p>
                     </div>
                   </div>
 
-                  {translatedPreviewUrl &&
-                    result.filename
-                      ?.toLowerCase()
-                      .endsWith(".pdf") && (
-                      <iframe
-                        src={
-                          translatedPreviewUrl
-                        }
-                        title="Translated document preview"
-                        className="h-[500px] w-full bg-white"
-                      />
+                  <div className="flex border-t border-black/10 lg:border-l lg:border-t-0">
+                    {translatedPreviewUrl && (
+                      <a
+                        href={translatedPreviewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-1 items-center justify-center border-r border-black/10 px-6 py-5 text-[10px] font-bold uppercase tracking-[0.18em] hover:bg-[#f3f1ed] lg:flex-none"
+                      >
+                        Open Preview
+                      </a>
                     )}
+
+                    {result.download_url && (
+                      <a
+                        href={result.download_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                        className="flex flex-1 items-center justify-center bg-black px-6 py-5 text-[10px] font-bold uppercase tracking-[0.18em] text-white hover:bg-black/80 lg:flex-none"
+                      >
+                        Download
+                      </a>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                {translatedPreviewUrl &&
+                  result.filename
+                    ?.toLowerCase()
+                    .endsWith(".pdf") && (
+                    <div className="bg-[#ebe9e4] p-5 lg:p-8">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/40">
+                            TRANSLATED DOCUMENT
+                          </p>
+
+                          <p className="mt-2 text-sm font-medium">
+                            {result.filename}
+                          </p>
+                        </div>
+
+                        <span className="text-[9px] font-mono text-black/30">
+                          {targetLanguage.toUpperCase()}
+                        </span>
+                      </div>
+
+                      <iframe
+                        src={translatedPreviewUrl}
+                        title="Translated document preview"
+                        className="h-[650px] w-full border border-black/10 bg-white"
+                      />
+                    </div>
+                  )}
+
+                {result.translated_text && (
+                  <div className="grid lg:grid-cols-2">
+                    <div className="border-b border-black/10 p-6 lg:border-b-0 lg:border-r lg:p-8">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/35">
+                        TRANSLATED TEXT
+                      </p>
+
+                      <div
+                        dir={
+                          selectedTargetIsRTL
+                            ? "rtl"
+                            : "ltr"
+                        }
+                        className="mt-6 whitespace-pre-wrap text-lg leading-8"
+                      >
+                        {result.translated_text}
+                      </div>
+                    </div>
+
+                    <div className="bg-[#f7f6f3] p-6 lg:p-8">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-black/35">
+                        DETAILS
+                      </p>
+
+                      <dl className="mt-6 divide-y divide-black/10 border-y border-black/10">
+                        <div className="flex items-center justify-between py-4">
+                          <dt className="text-xs text-black/40">
+                            Original
+                          </dt>
+
+                          <dd className="text-xs font-medium">
+                            {sourceLanguage}
+                          </dd>
+                        </div>
+
+                        <div className="flex items-center justify-between py-4">
+                          <dt className="text-xs text-black/40">
+                            Translation
+                          </dt>
+
+                          <dd className="text-xs font-medium">
+                            {targetLanguage}
+                          </dd>
+                        </div>
+
+                        <div className="flex items-center justify-between py-4">
+                          <dt className="text-xs text-black/40">
+                            Saved
+                          </dt>
+
+                          <dd className="text-xs font-medium">
+                            {result.saved
+                              ? "My Documents"
+                              : "Complete"}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* FOOTER INFO */}
+
+            <div className="mt-5 flex flex-col border-t border-black/10 pt-5 text-[9px] font-bold uppercase tracking-[0.18em] text-black/30 sm:flex-row sm:items-center sm:justify-center sm:gap-6">
+              <span>
+                Original remains unchanged
+              </span>
+
+              <span className="hidden sm:inline">
+                /
+              </span>
+
+              <span>
+                Translated copy saved separately
+              </span>
+
+              <span className="hidden sm:inline">
+                /
+              </span>
+
+              <span>
+                PDF + TXT supported
+              </span>
             </div>
-          )}
-        </div>
-
-        {mode === "document" && (
-          <div className="mt-5 flex flex-col gap-2 text-center text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
-            <span>
-              Original document remains unchanged
-            </span>
-
-            <span className="hidden sm:inline">
-              •
-            </span>
-
-            <span>
-              Translated copy saved separately
-            </span>
-
-            <span className="hidden sm:inline">
-              •
-            </span>
-
-            <span>
-              PDF and TXT supported
-            </span>
-          </div>
+          </>
         )}
       </div>
     </div>
