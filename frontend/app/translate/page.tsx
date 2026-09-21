@@ -8,6 +8,8 @@ import React, {
   useState,
 } from "react";
 
+import { createClient } from "@/lib/supabase/client";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://127.0.0.1:8000";
@@ -109,6 +111,7 @@ function formatFileSize(bytes?: number): string {
   }
 
   const units = ["B", "KB", "MB", "GB"];
+
   const index = Math.min(
     Math.floor(Math.log(bytes) / Math.log(1024)),
     units.length - 1,
@@ -217,6 +220,9 @@ export default function TranslatePage() {
   const [localPreviewUrl, setLocalPreviewUrl] =
     useState<string | null>(null);
 
+  const [libraryPreviewUrl, setLibraryPreviewUrl] =
+    useState<string | null>(null);
+
   const [libraryOpen, setLibraryOpen] =
     useState(false);
 
@@ -235,11 +241,7 @@ export default function TranslatePage() {
   // ==========================================================
 
   async function getAccessToken(): Promise<string> {
-    const supabaseModule =
-      await import("@/lib/supabase");
-
-    const supabase =
-      supabaseModule.supabase;
+    const supabase = createClient();
 
     const {
       data,
@@ -271,15 +273,6 @@ export default function TranslatePage() {
       const token =
         await getAccessToken();
 
-      /*
-       * The existing upload router owns the document
-       * authorization. We intentionally do not query
-       * Supabase directly from the browser for another
-       * user's documents.
-       *
-       * The route below should return only the authenticated
-       * user's documents.
-       */
       const response = await fetch(
         `${API_BASE_URL}/upload/documents`,
         {
@@ -354,6 +347,87 @@ export default function TranslatePage() {
   }, [localPreviewUrl]);
 
   // ==========================================================
+  // CLEAN LIBRARY PREVIEW URL
+  // ==========================================================
+
+  useEffect(() => {
+    return () => {
+      if (libraryPreviewUrl) {
+        URL.revokeObjectURL(
+          libraryPreviewUrl,
+        );
+      }
+    };
+  }, [libraryPreviewUrl]);
+
+  // ==========================================================
+  // LOAD SELECTED DOCUMENT PREVIEW
+  // ==========================================================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreview() {
+      if (!selectedDocument) {
+        setLibraryPreviewUrl(null);
+        return;
+      }
+
+      const fileType =
+        selectedDocument.file_type?.toLowerCase() ||
+        "";
+
+      if (!fileType.includes("pdf")) {
+        setLibraryPreviewUrl(null);
+        return;
+      }
+
+      try {
+        const token =
+          await getAccessToken();
+
+        const response = await fetch(
+          `${API_BASE_URL}/upload/${selectedDocument.id}/preview`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        const data =
+          await response.json().catch(
+            () => ({}),
+          );
+
+        if (
+          !response.ok ||
+          typeof data?.url !== "string"
+        ) {
+          return;
+        }
+
+        if (!cancelled) {
+          setLibraryPreviewUrl(
+            data.url,
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setLibraryPreviewUrl(null);
+        }
+      }
+    }
+
+    loadPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDocument]);
+
+  // ==========================================================
   // FILE SELECTION
   // ==========================================================
 
@@ -366,11 +440,13 @@ export default function TranslatePage() {
     setError("");
     setResult(null);
     setSelectedDocument(null);
+    setLibraryPreviewUrl(null);
 
     if (localPreviewUrl) {
       URL.revokeObjectURL(
         localPreviewUrl,
       );
+
       setLocalPreviewUrl(null);
     }
 
@@ -398,14 +474,13 @@ export default function TranslatePage() {
       );
 
       event.target.value = "";
+
       return;
     }
 
     setFile(selected);
 
-    if (
-      extension === "pdf"
-    ) {
+    if (extension === "pdf") {
       setLocalPreviewUrl(
         URL.createObjectURL(
           selected,
@@ -437,6 +512,8 @@ export default function TranslatePage() {
 
       setLocalPreviewUrl(null);
     }
+
+    setLibraryPreviewUrl(null);
   }
 
   // ==========================================================
@@ -453,6 +530,7 @@ export default function TranslatePage() {
     if (nextMode === "upload") {
       setSelectedDocument(null);
       setLibraryOpen(false);
+      setLibraryPreviewUrl(null);
     } else {
       setFile(null);
 
@@ -498,6 +576,7 @@ export default function TranslatePage() {
     }
 
     setTranslating(true);
+
     setTranslationStage(
       "Translating your text…",
     );
@@ -602,6 +681,7 @@ export default function TranslatePage() {
     }
 
     setTranslating(true);
+
     setTranslationStage(
       "Preparing your document…",
     );
@@ -705,6 +785,7 @@ export default function TranslatePage() {
     setResult(null);
     setError("");
     setTranslationStage("");
+    setLibraryPreviewUrl(null);
 
     if (localPreviewUrl) {
       URL.revokeObjectURL(
@@ -721,7 +802,7 @@ export default function TranslatePage() {
 
   const originalPreviewUrl =
     selectedDocument
-      ? `${API_BASE_URL}/upload/${selectedDocument.id}/preview`
+      ? libraryPreviewUrl
       : localPreviewUrl;
 
   const translatedPreviewUrl =
@@ -736,10 +817,6 @@ export default function TranslatePage() {
   return (
     <div className="min-h-screen bg-[#f7f0f6] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        {/* ================================================== */}
-        {/* HEADER */}
-        {/* ================================================== */}
-
         <div className="mb-8">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -756,10 +833,6 @@ export default function TranslatePage() {
             original file.
           </p>
         </div>
-
-        {/* ================================================== */}
-        {/* MODE SWITCH */}
-        {/* ================================================== */}
 
         <div className="mb-6 inline-flex rounded-2xl border border-white/80 bg-white/70 p-1 shadow-sm backdrop-blur">
           <button
@@ -795,15 +868,7 @@ export default function TranslatePage() {
           </button>
         </div>
 
-        {/* ================================================== */}
-        {/* MAIN CARD */}
-        {/* ================================================== */}
-
         <div className="rounded-[28px] border border-white/80 bg-white/80 p-5 shadow-[0_20px_70px_rgba(60,35,60,0.08)] backdrop-blur-xl sm:p-7">
-          {/* ================================================= */}
-          {/* LANGUAGE CONTROLS */}
-          {/* ================================================= */}
-
           <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-end">
             <div>
               <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
@@ -880,10 +945,6 @@ export default function TranslatePage() {
             </div>
           </div>
 
-          {/* ================================================= */}
-          {/* TEXT MODE */}
-          {/* ================================================= */}
-
           {mode === "text" && (
             <form
               onSubmit={
@@ -939,16 +1000,8 @@ export default function TranslatePage() {
             </form>
           )}
 
-          {/* ================================================= */}
-          {/* DOCUMENT MODE */}
-          {/* ================================================= */}
-
           {mode === "document" && (
             <div className="mt-7">
-              {/* ============================================= */}
-              {/* SOURCE SELECTOR */}
-              {/* ============================================= */}
-
               <div className="mb-5 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100/80 p-1">
                 <button
                   type="button"
@@ -959,8 +1012,7 @@ export default function TranslatePage() {
                     )
                   }
                   className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                    sourceMode ===
-                    "upload"
+                    sourceMode === "upload"
                       ? "bg-white text-slate-900 shadow-sm"
                       : "text-slate-500 hover:text-slate-800"
                   }`}
@@ -977,8 +1029,7 @@ export default function TranslatePage() {
                     )
                   }
                   className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
-                    sourceMode ===
-                    "library"
+                    sourceMode === "library"
                       ? "bg-white text-slate-900 shadow-sm"
                       : "text-slate-500 hover:text-slate-800"
                   }`}
@@ -987,12 +1038,7 @@ export default function TranslatePage() {
                 </button>
               </div>
 
-              {/* ============================================= */}
-              {/* UPLOAD */}
-              {/* ============================================= */}
-
-              {sourceMode ===
-                "upload" && (
+              {sourceMode === "upload" && (
                 <div>
                   <label
                     htmlFor="document-upload"
@@ -1040,12 +1086,7 @@ export default function TranslatePage() {
                 </div>
               )}
 
-              {/* ============================================= */}
-              {/* LIBRARY */}
-              {/* ============================================= */}
-
-              {sourceMode ===
-                "library" && (
+              {sourceMode === "library" && (
                 <div>
                   {!selectedDocument && (
                     <button
@@ -1107,6 +1148,9 @@ export default function TranslatePage() {
                             null,
                           );
                           setResult(null);
+                          setLibraryPreviewUrl(
+                            null,
+                          );
                         }}
                         disabled={
                           translating
@@ -1119,10 +1163,6 @@ export default function TranslatePage() {
                   )}
                 </div>
               )}
-
-              {/* ============================================= */}
-              {/* DOCUMENT LIBRARY MODAL */}
-              {/* ============================================= */}
 
               {libraryOpen &&
                 sourceMode ===
@@ -1167,9 +1207,7 @@ export default function TranslatePage() {
                         {!loadingDocuments &&
                           documentsError && (
                             <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
-                              {
-                                documentsError
-                              }
+                              {documentsError}
 
                               <button
                                 type="button"
@@ -1270,10 +1308,6 @@ export default function TranslatePage() {
                   </div>
                 )}
 
-              {/* ============================================= */}
-              {/* ORIGINAL PREVIEW */}
-              {/* ============================================= */}
-
               {(file ||
                 selectedDocument) && (
                 <div className="mt-5 overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50">
@@ -1316,9 +1350,18 @@ export default function TranslatePage() {
                   {file &&
                     file.name
                       .toLowerCase()
-                      .endsWith(
-                        ".txt",
-                      ) && (
+                      .endsWith(".txt") && (
+                      <div className="p-6">
+                        <p className="text-xs text-slate-400">
+                          Text document ready for translation.
+                        </p>
+                      </div>
+                    )}
+
+                  {selectedDocument &&
+                    selectedDocument.file_type
+                      ?.toLowerCase()
+                      .includes("txt") && (
                       <div className="p-6">
                         <p className="text-xs text-slate-400">
                           Text document ready for translation.
@@ -1328,19 +1371,11 @@ export default function TranslatePage() {
                 </div>
               )}
 
-              {/* ============================================= */}
-              {/* ERROR */}
-              {/* ============================================= */}
-
               {error && (
                 <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {error}
                 </div>
               )}
-
-              {/* ============================================= */}
-              {/* TRANSLATION STATE */}
-              {/* ============================================= */}
 
               {translating && (
                 <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
@@ -1360,10 +1395,6 @@ export default function TranslatePage() {
                   </div>
                 </div>
               )}
-
-              {/* ============================================= */}
-              {/* TRANSLATE BUTTON */}
-              {/* ============================================= */}
 
               <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs leading-5 text-slate-400">
@@ -1391,9 +1422,14 @@ export default function TranslatePage() {
 
                   <button
                     type="button"
-                    onClick={
-                      handleDocumentTranslation as any
-                    }
+                    onClick={() => {
+                      void handleDocumentTranslation(
+                        {
+                          preventDefault:
+                            () => {},
+                        } as FormEvent,
+                      );
+                    }}
                     disabled={
                       translating ||
                       (!file &&
@@ -1407,10 +1443,6 @@ export default function TranslatePage() {
                   </button>
                 </div>
               </div>
-
-              {/* ============================================= */}
-              {/* RESULT */}
-              {/* ============================================= */}
 
               {result?.success && (
                 <div className="mt-7 overflow-hidden rounded-[24px] border border-emerald-100 bg-emerald-50/60">
@@ -1464,9 +1496,7 @@ export default function TranslatePage() {
                   {translatedPreviewUrl &&
                     result.filename
                       ?.toLowerCase()
-                      .endsWith(
-                        ".pdf",
-                      ) && (
+                      .endsWith(".pdf") && (
                       <iframe
                         src={
                           translatedPreviewUrl
@@ -1480,10 +1510,6 @@ export default function TranslatePage() {
             </div>
           )}
         </div>
-
-        {/* ================================================== */}
-        {/* FOOTER TRUST NOTE */}
-        {/* ================================================== */}
 
         {mode === "document" && (
           <div className="mt-5 flex flex-col gap-2 text-center text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
