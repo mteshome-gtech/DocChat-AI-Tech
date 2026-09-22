@@ -10,7 +10,6 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code");
   const type = requestUrl.searchParams.get("type");
   const plan = requestUrl.searchParams.get("plan");
-
   const origin = requestUrl.origin;
 
   if (!code) {
@@ -21,8 +20,7 @@ export async function GET(request: Request) {
 
   const supabase = await createClient();
 
-  const { error } =
-    await supabase.auth.exchangeCodeForSession(code);
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
     console.error("Auth callback error:", error);
@@ -35,7 +33,7 @@ export async function GET(request: Request) {
   // Password recovery
   if (type === "recovery") {
     return NextResponse.redirect(
-      `${origin}/auth/reset-password`
+      `${origin}/reset-password`
     );
   }
 
@@ -50,7 +48,7 @@ export async function GET(request: Request) {
     );
   }
 
-  /*
+  /**
    * Determine the selected plan.
    *
    * Query parameter takes priority.
@@ -63,7 +61,7 @@ export async function GET(request: Request) {
         ? "pro"
         : "free";
 
-  /*
+  /**
    * PRO SIGNUP
    *
    * Verified Pro users go directly to Stripe Checkout.
@@ -84,16 +82,13 @@ export async function GET(request: Request) {
         `${API_URL}/api/billing/create-checkout-session`,
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
             user_id: user.id,
             email: user.email,
           }),
-
           cache: "no-store",
         }
       );
@@ -128,7 +123,7 @@ export async function GET(request: Request) {
         );
       }
 
-      /*
+      /**
        * Send the verified user directly to Stripe.
        */
       return NextResponse.redirect(
@@ -146,7 +141,7 @@ export async function GET(request: Request) {
     }
   }
 
-  /*
+  /**
    * FREE SIGNUP
    *
    * Verified Free users go directly to Dashboard.
