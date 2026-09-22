@@ -17,10 +17,9 @@ from google import genai
 from app.routes.upload import (
     get_authenticated_user,
     supabase,
-    SUPABASE_STORAGE_BUCKET,
+    SUPABASE_BUCKET,
 )
 from app.services.rag import extract_text
-
 
 load_dotenv()
 
@@ -32,7 +31,6 @@ router = APIRouter(
 
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
 GEMINI_MODEL = os.getenv(
     "GEMINI_MODEL",
     "gemini-3.7-flash",
@@ -168,6 +166,7 @@ def build_prompt(
 ===== DOCUMENT: {filename} =====
 
 {text}
+
 """
         )
 
@@ -200,6 +199,7 @@ Important requirements:
 Documents:
 
 {combined_documents}
+
 """
 
 
@@ -237,11 +237,13 @@ async def analyze_documents(
     temporary_files: list[Path] = []
 
     try:
+
         # -------------------------------------------------
         # Process an existing saved document
         # -------------------------------------------------
 
         if document_id:
+
             document_result = (
                 supabase
                 .table("documents")
@@ -294,13 +296,15 @@ async def analyze_documents(
                     supabase
                     .storage
                     .from_(
-                        SUPABASE_STORAGE_BUCKET
+                        SUPABASE_BUCKET
                     )
                     .download(
                         storage_path
                     )
                 )
+
             except Exception as storage_error:
+
                 print(
                     "Saved document download error:",
                     storage_error,
@@ -333,10 +337,8 @@ async def analyze_documents(
                 saved_filename
             ).suffix.lower()
 
-            if (
-                saved_extension
-                not in allowed_extensions
-            ):
+            if saved_extension not in allowed_extensions:
+
                 saved_file_type = (
                     saved_document.get("file_type")
                     or ""
@@ -360,10 +362,7 @@ async def analyze_documents(
                 }:
                     saved_extension = ".txt"
 
-            if (
-                saved_extension
-                not in allowed_extensions
-            ):
+            if saved_extension not in allowed_extensions:
                 raise HTTPException(
                     status_code=400,
                     detail=(
@@ -377,6 +376,7 @@ async def analyze_documents(
                 delete=False,
                 suffix=saved_extension,
             ) as temp_file:
+
                 temp_path = Path(
                     temp_file.name
                 )
@@ -414,6 +414,7 @@ async def analyze_documents(
         # -------------------------------------------------
 
         for file in files:
+
             if not file.filename:
                 raise HTTPException(
                     status_code=400,
@@ -447,6 +448,7 @@ async def analyze_documents(
                 )
 
                 while True:
+
                     chunk = await file.read(
                         1024 * 1024
                     )
@@ -509,7 +511,9 @@ async def analyze_documents(
         last_error = None
 
         for attempt in range(4):
+
             try:
+
                 print(
                     f"Gemini analysis attempt "
                     f"{attempt + 1}/4..."
@@ -525,6 +529,7 @@ async def analyze_documents(
                 break
 
             except Exception as error:
+
                 last_error = error
                 error_text = str(error)
 
@@ -592,6 +597,7 @@ async def analyze_documents(
         raise
 
     except Exception as error:
+
         print(
             "Analyze error:",
             error,
@@ -605,15 +611,20 @@ async def analyze_documents(
         )
 
     finally:
+
         # -------------------------------------------------
         # Clean up temporary files
         # -------------------------------------------------
 
         for temp_path in temporary_files:
+
             try:
+
                 if temp_path.exists():
                     temp_path.unlink()
+
             except Exception as cleanup_error:
+
                 print(
                     "Temporary file cleanup error:",
                     cleanup_error,
