@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-
 import { createClient } from "@/lib/supabase/server";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -30,14 +29,12 @@ export async function GET(request: Request) {
     );
   }
 
-  // Password recovery
   if (type === "recovery") {
     return NextResponse.redirect(
       `${origin}/reset-password`
     );
   }
 
-  // Get authenticated user
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -48,12 +45,6 @@ export async function GET(request: Request) {
     );
   }
 
-  /**
-   * Determine the selected plan.
-   *
-   * Query parameter takes priority.
-   * Supabase user metadata is the fallback.
-   */
   const selectedPlan =
     plan === "pro"
       ? "pro"
@@ -61,11 +52,6 @@ export async function GET(request: Request) {
         ? "pro"
         : "free";
 
-  /**
-   * PRO SIGNUP
-   *
-   * Verified Pro users go directly to Stripe Checkout.
-   */
   if (selectedPlan === "pro") {
     if (!API_URL) {
       console.error(
@@ -123,12 +109,7 @@ export async function GET(request: Request) {
         );
       }
 
-      /**
-       * Send the verified user directly to Stripe.
-       */
-      return NextResponse.redirect(
-        data.checkout_url
-      );
+      return NextResponse.redirect(data.checkout_url);
     } catch (error) {
       console.error(
         "Pro checkout initialization error:",
@@ -141,11 +122,6 @@ export async function GET(request: Request) {
     }
   }
 
-  /**
-   * FREE SIGNUP
-   *
-   * Verified Free users go directly to Dashboard.
-   */
   return NextResponse.redirect(
     `${origin}/dashboard`
   );
