@@ -5,11 +5,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
+  const origin = requestUrl.origin;
 
   const code = requestUrl.searchParams.get("code");
   const type = requestUrl.searchParams.get("type");
   const plan = requestUrl.searchParams.get("plan");
-  const origin = requestUrl.origin;
 
   if (!code) {
     return NextResponse.redirect(
@@ -19,13 +19,19 @@ export async function GET(request: Request) {
 
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { error: exchangeError } =
+    await supabase.auth.exchangeCodeForSession(code);
 
-  if (error) {
-    console.error("Auth callback error:", error);
+  if (exchangeError) {
+    console.error(
+      "Auth callback exchange error:",
+      exchangeError.message
+    );
 
     return NextResponse.redirect(
-      `${origin}/auth/signin?error=auth_failed`
+      `${origin}/auth/signin?error=${encodeURIComponent(
+        exchangeError.message
+      )}`
     );
   }
 
@@ -37,9 +43,10 @@ export async function GET(request: Request) {
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (userError || !user) {
     return NextResponse.redirect(
       `${origin}/auth/signin?error=session_missing`
     );
