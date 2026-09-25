@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   if (type === "recovery") {
     return NextResponse.redirect(
-      `${origin}/reset-password`
+      `${origin}/auth/reset-password`
     );
   }
 
