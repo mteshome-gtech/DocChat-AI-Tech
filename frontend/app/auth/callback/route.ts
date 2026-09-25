@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code");
   const type = requestUrl.searchParams.get("type");
   const plan = requestUrl.searchParams.get("plan");
+  const next = requestUrl.searchParams.get("next");
 
   if (!code) {
     return NextResponse.redirect(
@@ -35,7 +36,19 @@ export async function GET(request: Request) {
     );
   }
 
-  if (type === "recovery") {
+  /*
+   * Password recovery flow.
+   *
+   * The forgot-password page sends:
+   * /auth/callback?next=/auth/reset-password
+   *
+   * After exchanging the recovery code for a session,
+   * send the user to the reset-password page.
+   */
+  if (
+    type === "recovery" ||
+    next === "/auth/reset-password"
+  ) {
     return NextResponse.redirect(
       `${origin}/auth/reset-password`
     );
