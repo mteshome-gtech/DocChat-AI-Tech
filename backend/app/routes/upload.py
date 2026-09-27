@@ -457,6 +457,13 @@ async def upload_document(
             except Exception:
                 # Do not allow one embedding failure to
                 # destroy the user's uploaded document.
+
+                print(
+                    f"[EMBEDDING ERROR] "
+                    f"document={document_id}"
+                    f"chunk_length={len(chunk)}"
+                    f"error={error}"
+                )
                 continue
 
             if not embedding:
@@ -478,6 +485,13 @@ async def upload_document(
             except Exception:
                 # Chunk indexing failure must not invalidate
                 # the uploaded source document.
+
+                print(
+                    f"[CHUNK INSERT ERROR]"
+                    f"document={document_id}"
+                    f"chunk_length={len(chunk)}"
+                    f"error={error}"
+                )
                 continue
 
         # ====================================================
