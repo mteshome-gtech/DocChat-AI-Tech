@@ -45,6 +45,8 @@ export default function ChatPage() {
 
   const supabase = useMemo(() => createClient(), []);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
   useEffect(() => {
     loadDocuments();
   }, []);
@@ -131,7 +133,7 @@ export default function ChatPage() {
       }
 
       const response = await fetch(
-        "http://127.0.0.1:8000/api/chat",
+        `${API_URL}/api/chat`,
         {
           method: "POST",
           headers: {
