@@ -454,7 +454,7 @@ async def upload_document(
                         chunk
                     )
                 )
-            except Exception:
+            except Exception as error:
                 # Do not allow one embedding failure to
                 # destroy the user's uploaded document.
 
@@ -482,7 +482,7 @@ async def upload_document(
                     )
                     .execute()
                 )
-            except Exception:
+            except Exception as error:
                 # Chunk indexing failure must not invalidate
                 # the uploaded source document.
 
