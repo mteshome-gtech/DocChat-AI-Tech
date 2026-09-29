@@ -87,6 +87,23 @@ async def health():
         "status": "ok"
     }
 
+@app.get("/debug/routes")
+async def debug_routes():
+    routes = []
+
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        methods = getattr(route, "methods", None)
+
+        if path:
+            routes.append({
+                "path": path,
+                "methods": sorted(methods) if methods else [],
+            })
+
+    return {
+        "routes": routes
+    }
 
 async def print_routes():
     print("\n========== REGISTERED ROUTES ==========")
