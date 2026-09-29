@@ -84,7 +84,6 @@ ALLOWED_EXTENSIONS = {
 def get_content_type(
     extension: str,
 ) -> str:
-
     mapping = {
         ".pdf": "application/pdf",
         ".txt": "text/plain",
@@ -103,7 +102,6 @@ def get_content_type(
 def sanitize_filename(
     filename: str,
 ) -> str:
-
     original = Path(
         filename or "document"
     ).name
@@ -132,7 +130,6 @@ def sanitize_filename(
 def create_unique_temp_path(
     filename: str,
 ) -> Path:
-
     extension = (
         Path(filename)
         .suffix
@@ -244,13 +241,14 @@ def create_signed_url(
 # UPLOAD DOCUMENT
 # ============================================================
 
-@router.post("/")
+@router.post("")
 async def upload_document(
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(
         default=None
     ),
 ):
+
     user = get_authenticated_user(
         authorization
     )
@@ -287,6 +285,7 @@ async def upload_document(
     storage_path: Optional[str] = None
 
     try:
+
         # ====================================================
         # SAVE TEMP FILE
         # ====================================================
@@ -296,6 +295,7 @@ async def upload_document(
         ) as destination:
 
             while True:
+
                 chunk = await file.read(
                     1024 * 1024
                 )
@@ -324,15 +324,19 @@ async def upload_document(
                 detail="The uploaded file is empty.",
             )
 
+
         # ====================================================
         # EXTRACT TEXT
         # ====================================================
 
         try:
+
             text = extract_text(
                 str(temp_path)
             )
+
         except Exception as exc:
+
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -341,11 +345,20 @@ async def upload_document(
                 ),
             ) from exc
 
+        if not text or not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No readable text was found in this document."
+                ),
+            )
+
         word_count = (
             len(text.split())
             if text
             else 0
         )
+
 
         # ====================================================
         # CREATE DOCUMENT RECORD
@@ -385,6 +398,7 @@ async def upload_document(
             inserted_rows[0]["id"]
         )
 
+
         # ====================================================
         # STORAGE PATH
         # ====================================================
@@ -398,6 +412,7 @@ async def upload_document(
         file_bytes = (
             temp_path.read_bytes()
         )
+
 
         # ====================================================
         # UPLOAD TO STORAGE
@@ -415,6 +430,7 @@ async def upload_document(
                 "upsert": False,
             },
         )
+
 
         # ====================================================
         # UPDATE STORAGE PATH
@@ -439,6 +455,7 @@ async def upload_document(
             .execute()
         )
 
+
         # ====================================================
         # CREATE RAG CHUNKS
         # ====================================================
@@ -447,29 +464,66 @@ async def upload_document(
             text
         )
 
-        for chunk in chunks:
+        if not chunks:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "The document was read successfully, "
+                    "but no searchable text chunks could be created."
+                ),
+            )
+
+        successful_chunks = 0
+
+        for chunk_index, chunk in enumerate(
+            chunks
+        ):
+
+            # ------------------------------------------------
+            # GENERATE EMBEDDING
+            # ------------------------------------------------
+
             try:
-                embedding = (
-                    await generate_embedding(
-                        chunk
-                    )
+
+                embedding = await generate_embedding(
+                    chunk
                 )
+
             except Exception as error:
-                # Do not allow one embedding failure to
-                # destroy the user's uploaded document.
 
                 print(
                     f"[EMBEDDING ERROR] "
-                    f"document={document_id}"
-                    f"chunk_length={len(chunk)}"
+                    f"document={document_id} "
+                    f"chunk_index={chunk_index} "
+                    f"chunk_length={len(chunk)} "
                     f"error={error}"
                 )
+
                 continue
+
+
+            # ------------------------------------------------
+            # VALIDATE EMBEDDING
+            # ------------------------------------------------
 
             if not embedding:
+
+                print(
+                    f"[EMBEDDING ERROR] "
+                    f"document={document_id} "
+                    f"chunk_index={chunk_index} "
+                    f"error=Empty embedding"
+                )
+
                 continue
 
+
+            # ------------------------------------------------
+            # INSERT CHUNK
+            # ------------------------------------------------
+
             try:
+
                 (
                     supabase
                     .table("document_chunks")
@@ -477,22 +531,50 @@ async def upload_document(
                         {
                             "document_id": document_id,
                             "content": chunk,
+                            "chunk_index": chunk_index,
                             "embedding": embedding,
                         }
                     )
                     .execute()
                 )
+
+                successful_chunks += 1
+
             except Exception as error:
-                # Chunk indexing failure must not invalidate
-                # the uploaded source document.
 
                 print(
-                    f"[CHUNK INSERT ERROR]"
-                    f"document={document_id}"
-                    f"chunk_length={len(chunk)}"
+                    f"[CHUNK INSERT ERROR] "
+                    f"document={document_id} "
+                    f"chunk_index={chunk_index} "
+                    f"chunk_length={len(chunk)} "
                     f"error={error}"
                 )
+
                 continue
+
+
+        # ====================================================
+        # VERIFY RAG CHUNKS
+        # ====================================================
+
+        if successful_chunks == 0:
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "The document was read successfully, "
+                    "but no searchable content could be created."
+                ),
+            )
+
+
+        print(
+            f"[RAG COMPLETE] "
+            f"document={document_id} "
+            f"total_chunks={len(chunks)} "
+            f"successful_chunks={successful_chunks}"
+        )
+
 
         # ====================================================
         # MARK READY
@@ -517,6 +599,7 @@ async def upload_document(
             .execute()
         )
 
+
         # ====================================================
         # PREVIEW URL
         # ====================================================
@@ -525,6 +608,7 @@ async def upload_document(
             storage_path,
             expires_in=300,
         )
+
 
         return {
             "success": True,
@@ -539,16 +623,28 @@ async def upload_document(
             "preview_url": preview_url,
         }
 
+
     except HTTPException:
         raise
 
-    except Exception:
+
+    except Exception as error:
+
+        print(
+            f"[UPLOAD ERROR] "
+            f"document={document_id} "
+            f"error={error}"
+        )
+
+
         # ====================================================
         # CLEAN DATABASE
         # ====================================================
 
         if document_id:
+
             try:
+
                 (
                     supabase
                     .table("document_chunks")
@@ -559,10 +655,13 @@ async def upload_document(
                     )
                     .execute()
                 )
+
             except Exception:
                 pass
 
+
             try:
+
                 (
                     supabase
                     .table("documents")
@@ -577,15 +676,19 @@ async def upload_document(
                     )
                     .execute()
                 )
+
             except Exception:
                 pass
+
 
         # ====================================================
         # CLEAN STORAGE
         # ====================================================
 
         if storage_path:
+
             try:
+
                 (
                     supabase
                     .storage
@@ -594,8 +697,10 @@ async def upload_document(
                         [storage_path]
                     )
                 )
+
             except Exception:
                 pass
+
 
         raise HTTPException(
             status_code=500,
@@ -605,14 +710,18 @@ async def upload_document(
             ),
         )
 
+
     finally:
+
         # ====================================================
         # DELETE TEMP FILE
         # ====================================================
 
         try:
+
             if temp_path.exists():
                 temp_path.unlink()
+
         except Exception:
             pass
 
@@ -627,6 +736,7 @@ async def list_documents(
         default=None
     ),
 ):
+
     """
     Return only documents owned by the authenticated user.
 
@@ -638,6 +748,7 @@ async def list_documents(
     )
 
     try:
+
         result = (
             supabase
             .table("documents")
@@ -657,6 +768,7 @@ async def list_documents(
         )
 
     except Exception:
+
         raise HTTPException(
             status_code=500,
             detail=(
@@ -664,12 +776,15 @@ async def list_documents(
             ),
         )
 
+
     documents = []
 
     for document in (
         result.data or []
     ):
+
         # Never expose storage paths to the browser.
+
         documents.append(
             {
                 "id": document.get(
@@ -696,6 +811,7 @@ async def list_documents(
             }
         )
 
+
     return {
         "success": True,
         "documents": documents,
@@ -713,11 +829,13 @@ async def preview_document(
         default=None
     ),
 ):
+
     user = get_authenticated_user(
         authorization
     )
 
     try:
+
         result = (
             supabase
             .table("documents")
@@ -738,6 +856,7 @@ async def preview_document(
         )
 
     except Exception:
+
         raise HTTPException(
             status_code=500,
             detail=(
@@ -745,19 +864,23 @@ async def preview_document(
             ),
         )
 
+
     rows = result.data or []
 
     if not rows:
+
         raise HTTPException(
             status_code=404,
             detail="Document not found.",
         )
+
 
     document = rows[0]
 
     if not document.get(
         "storage_path"
     ):
+
         raise HTTPException(
             status_code=404,
             detail=(
@@ -765,18 +888,21 @@ async def preview_document(
             ),
         )
 
+
     signed_url = create_signed_url(
         document["storage_path"],
         expires_in=300,
     )
 
     if not signed_url:
+
         raise HTTPException(
             status_code=500,
             detail=(
                 "Unable to create document preview."
             ),
         )
+
 
     return {
         "success": True,
@@ -805,11 +931,13 @@ async def delete_document(
         default=None
     ),
 ):
+
     user = get_authenticated_user(
         authorization
     )
 
     try:
+
         result = (
             supabase
             .table("documents")
@@ -829,6 +957,7 @@ async def delete_document(
         )
 
     except Exception:
+
         raise HTTPException(
             status_code=500,
             detail=(
@@ -836,15 +965,19 @@ async def delete_document(
             ),
         )
 
+
     rows = result.data or []
 
     if not rows:
+
         raise HTTPException(
             status_code=404,
             detail="Document not found.",
         )
 
+
     document = rows[0]
+
 
     # ========================================================
     # DELETE STORAGE
@@ -855,7 +988,9 @@ async def delete_document(
     )
 
     if storage_path:
+
         try:
+
             (
                 supabase
                 .storage
@@ -864,14 +999,17 @@ async def delete_document(
                     [storage_path]
                 )
             )
+
         except Exception:
             pass
+
 
     # ========================================================
     # DELETE CHUNKS
     # ========================================================
 
     try:
+
         (
             supabase
             .table("document_chunks")
@@ -882,14 +1020,17 @@ async def delete_document(
             )
             .execute()
         )
+
     except Exception:
         pass
+
 
     # ========================================================
     # DELETE DOCUMENT
     # ========================================================
 
     try:
+
         (
             supabase
             .table("documents")
@@ -906,12 +1047,14 @@ async def delete_document(
         )
 
     except Exception:
+
         raise HTTPException(
             status_code=500,
             detail=(
                 "Unable to delete the document."
             ),
         )
+
 
     return {
         "success": True,
