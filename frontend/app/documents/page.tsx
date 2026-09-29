@@ -459,7 +459,7 @@ export default function DocumentsPage() {
             </div>
 
             <Link
-              href="/upload"
+              href="/documents/upload"
               className="group inline-flex w-fit items-center gap-3 border border-black bg-black px-6 py-4 text-sm font-medium text-white transition hover:bg-black/85"
             >
               <Upload className="h-4 w-4" />
