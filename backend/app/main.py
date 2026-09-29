@@ -86,3 +86,18 @@ async def health():
     return {
         "status": "ok"
     }
+
+
+@app.on_event("startup")
+async def print_routes():
+    print("\n========== REGISTERED ROUTES ==========")
+
+    for route in app.routes:
+        methods = getattr(route, "methods", None)
+
+        if methods:
+            print(f"{sorted(methods)} {route.path}")
+        else:
+            print(route.path)
+
+    print("=======================================\n")
