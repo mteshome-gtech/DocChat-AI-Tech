@@ -88,7 +88,6 @@ async def health():
     }
 
 
-@app.on_event("startup")
 async def print_routes():
     print("\n========== REGISTERED ROUTES ==========")
 
