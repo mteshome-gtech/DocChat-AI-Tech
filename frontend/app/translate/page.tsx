@@ -522,7 +522,7 @@ export default function TranslatePage() {
       );
 
       const response = await fetch(
-        `${API_BASE_URL}/translate/text`,
+        `${API_BASE_URL}/api/translate/text`,
         {
           method: "POST",
           headers: {
@@ -622,7 +622,7 @@ export default function TranslatePage() {
       );
 
       const response = await fetch(
-        `${API_BASE_URL}/translate/document`,
+        `${API_BASE_URL}/api/translate/document`,
         {
           method: "POST",
           headers: {
