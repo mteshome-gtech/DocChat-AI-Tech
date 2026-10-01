@@ -58,7 +58,7 @@ async def chat_health():
     }
 
 
-@router.post("/")
+@router.post("")
 async def chat(
     request: ChatRequest,
     authorization: str | None = Header(default=None),

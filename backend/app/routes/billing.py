@@ -70,6 +70,9 @@ def get_stripe_metadata_value(
         return default
 
     try:
+        if hasattr(metadata, "get"):
+            return metadata.get(key, default)
+        
         return getattr(
             metadata,
             key,
@@ -457,6 +460,225 @@ async def create_checkout_session(
         "session_id":
             checkout_session.id,
     }
+
+# =========================================================
+# VERIFY CHECKOUT SESSION
+# =========================================================
+
+@router.post("/verify-checkout-session")
+async def verify_checkout_session(
+    request: Request, 
+):
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Stripe secret key is not configured."
+        )
+
+    body = await request.json()
+
+    session_id = body.get("session_id")
+    user_id = body.get("user_id")
+
+    if not session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="session_id is required.",
+        )
+
+    if not user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="user_id is required.",
+        )
+
+    supabase = get_supabase()
+
+    profile_response = (
+        supabase
+        .table("profiles")
+        .select(
+            "id, email, plan, subscription_status, "
+            "stripe_customer_id, stripe_subscription_id, "
+            "subscription_period_end"
+        )
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+
+    profile = profile_response.data
+
+    if not profile:
+        raise HTTPException(
+            status_code=404,
+            detail="User profile not found.",
+        )
+
+    try:
+        checkout_session = (
+            stripe.checkout.Session.retrieve(
+                session_id
+            )
+        )
+    except stripe.error.StripeError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unable to verify Stripe Checkout session: {error}",
+        )
+
+    # -----------------------------------------------------
+    # VERIFY THIS CHECKOUT BELONGS TO THIS USER
+    # -----------------------------------------------------
+
+    session_user_id = get_stripe_metadata_value(
+        checkout_session,
+        "supabase_user_id",
+    )
+
+    if session_user_id and session_user_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="This checkout session does not belong to this user.",
+        )
+
+    # -----------------------------------------------------
+    # VERIFY CHECKOUT COMPLETED
+    # -----------------------------------------------------
+
+    session_status = getattr(
+        checkout_session,
+        "status",
+        None,
+    )
+
+    payment_status = getattr(
+        checkout_session,
+        "payment_status",
+        None,
+    )
+
+    if session_status != "complete":
+        raise HTTPException(
+            status_code=400,
+            detail="Stripe Checkout has not been completed.",
+        )
+
+    if payment_status not in {
+        "paid",
+        "no_payment_required",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="Stripe payment has not been completed.",
+        )
+
+    # -----------------------------------------------------
+    # GET SUBSCRIPTION
+    # -----------------------------------------------------
+
+    subscription_id = getattr(
+        checkout_session,
+        "subscription",
+        None,
+    )
+
+    if not subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Stripe subscription was found for this checkout.",
+        )
+
+    try:
+        subscription = (
+            stripe.Subscription.retrieve(
+                subscription_id
+            )
+        )
+    except stripe.error.StripeError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unable to retrieve Stripe subscription: {error}",
+        )
+
+    status = get_subscription_status(
+        subscription
+    )
+
+    if status not in {
+        "active",
+        "trialing",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The Stripe subscription is not active. "
+                f"Current status: {status}"
+            ),
+        )
+
+    customer_id = getattr(
+        checkout_session,
+        "customer",
+        None,
+    )
+
+    period_end_iso = get_period_end_iso(
+        subscription
+    )
+
+    subscription_status = (
+        "trialing"
+        if status == "trialing"
+        else "active"
+    )
+
+    # -----------------------------------------------------
+    # UPDATE SUPABASE
+    # -----------------------------------------------------
+
+    (
+        supabase
+        .table("profiles")
+        .update(
+            {
+                "plan": "pro",
+                "subscription_status":
+                    subscription_status,
+                "stripe_customer_id":
+                    customer_id,
+                "stripe_subscription_id":
+                    subscription_id,
+                "subscription_period_end":
+                    period_end_iso,
+            }
+        )
+        .eq("id", user_id)
+        .execute()
+    )
+
+    print(
+        f"SUCCESS: Checkout verified for user {user_id}. "
+        f"Subscription={subscription_id}, "
+        f"Status={subscription_status}, "
+        f"PeriodEnd={period_end_iso}"
+    )
+
+    return {
+        "success": True,
+        "plan": "pro",
+        "subscription_status":
+            subscription_status,
+        "stripe_customer_id":
+            customer_id,
+        "stripe_subscription_id":
+            subscription_id,
+        "subscription_period_end":
+            period_end_iso,
+        "message":
+            "Your Pro subscription has been activated.",
+    }
+
 
 
 # =========================================================
