@@ -375,13 +375,13 @@ export default function TranslatePage() {
 
         if (
           !response.ok ||
-          typeof data?.url !== "string"
+          typeof data?.preview_url !== "string"
         ) {
           return;
         }
 
         if (!cancelled) {
-          setLibraryPreviewUrl(data.url);
+          setLibraryPreviewUrl(data.preview_url);
         }
       } catch {
         if (!cancelled) {
@@ -1317,8 +1317,15 @@ export default function TranslatePage() {
                                 {documents
                                   .filter(
                                     (document) =>
-                                      document.status !==
-                                      "processing",
+                                      document.status !=="processing" &&
+                                    (
+                                      document.file_type?.toLowerCase().includes("pdf") ||
+                                      document.file_type?.toLowerCase().includes("text/plain") ||
+                                      document.file_name?.toLowerCase().endsWith(".pdf") ||
+                                      document.file_name?.toLowerCase().endsWith(".txt") ||
+                                      document.name?.toLowerCase().endsWith(".pdf") ||
+                                      document.name?.toLowerCase().endsWith(".txt")
+                                    ),
                                   )
                                   .map((document) => (
                                     <button
