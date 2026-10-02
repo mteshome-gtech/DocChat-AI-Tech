@@ -38,6 +38,8 @@ type PreviewResponse = {
   text?: string;
   preview?: string;
   content?: string;
+  preview_url?: string;
+  download_url?: string;
   detail?: string;
 };
 
@@ -53,6 +55,7 @@ export default function DocumentsPage() {
     useState<Document | null>(null);
 
   const [previewText, setPreviewText] = useState("");
+  const [previewUrl, setPreviewUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
 
@@ -118,6 +121,7 @@ export default function DocumentsPage() {
     try {
       setSelectedDocument(document);
       setPreviewText("");
+      setPreviewUrl("");
       setPreviewError("");
       setPreviewLoading(true);
 
@@ -179,11 +183,17 @@ export default function DocumentsPage() {
         data.content ||
         "";
 
-      setPreviewText(text);
+      const returnedPreviewUrl =
+        data.preview_url ||
+        data.download_url ||
+        "";
 
-      if (!text) {
+      setPreviewText(text);
+      setPreviewUrl(returnedPreviewUrl);
+
+      if (!text && !returnedPreviewUrl) {
         setPreviewError(
-          "The document was loaded, but no preview text was returned."
+          "The document was loaded, but no preview was returned."
         );
       }
     } catch (error) {
@@ -280,6 +290,7 @@ export default function DocumentsPage() {
   function closePreview() {
     setSelectedDocument(null);
     setPreviewText("");
+    setPreviewUrl("");
     setPreviewError("");
     setPreviewLoading(false);
   }
@@ -459,7 +470,7 @@ export default function DocumentsPage() {
             </div>
 
             <Link
-              href="/documents/upload"
+              href="/upload"
               className="group inline-flex w-fit items-center gap-3 border border-black bg-black px-6 py-4 text-sm font-medium text-white transition hover:bg-black/85"
             >
               <Upload className="h-4 w-4" />
@@ -675,6 +686,7 @@ export default function DocumentsPage() {
         <PreviewModal
           document={selectedDocument}
           previewText={previewText}
+          previewUrl={previewUrl}
           previewLoading={previewLoading}
           previewError={previewError}
           onClose={closePreview}
@@ -973,7 +985,7 @@ function EmptyState() {
       </p>
 
       <Link
-        href="/documents/upload"
+        href="/upload"
         className="mt-8 inline-flex items-center gap-3 border border-black bg-black px-6 py-4 text-sm font-medium text-white transition hover:bg-black/85"
       >
         <Upload className="h-4 w-4" />
@@ -1015,6 +1027,7 @@ function FilteredEmptyState({
 function PreviewModal({
   document,
   previewText,
+  previewUrl,
   previewLoading,
   previewError,
   onClose,
@@ -1022,6 +1035,7 @@ function PreviewModal({
 }: {
   document: Document;
   previewText: string;
+  previewUrl: string;
   previewLoading: boolean;
   previewError: string;
   onClose: () => void;
@@ -1030,6 +1044,41 @@ function PreviewModal({
     fileName?: string
   ) => string;
 }) {
+  const extension =
+    document.file_name
+      ?.split(".")
+      .pop()
+      ?.toLowerCase() ||
+    document.name
+      ?.split(".")
+      .pop()
+      ?.toLowerCase() ||
+    "";
+
+  const mimeType =
+    document.mime_type?.toLowerCase() || "";
+
+  const isPdf =
+    extension === "pdf" ||
+    mimeType.includes("pdf");
+
+  const isWordDocument =
+    extension === "docx" ||
+    extension === "doc" ||
+    mimeType.includes("word") ||
+    mimeType.includes("officedocument");
+
+  const isTextDocument =
+    extension === "txt" ||
+    mimeType.includes("text/plain");
+
+  const officeViewerUrl =
+    previewUrl && isWordDocument
+      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+          previewUrl
+        )}`
+      : "";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-sm sm:p-6">
       <div
@@ -1108,28 +1157,62 @@ function PreviewModal({
                 </p>
               </div>
             </div>
+          ) : previewUrl && isPdf ? (
+            <div className="h-[65vh] p-3 sm:p-5">
+              <iframe
+                src={previewUrl}
+                title={`Preview of ${document.name}`}
+                className="h-full w-full border border-black/10 bg-white"
+              />
+            </div>
+          ) : previewUrl && isWordDocument ? (
+            <div className="h-[65vh] p-3 sm:p-5">
+              <iframe
+                src={officeViewerUrl}
+                title={`Preview of ${document.name}`}
+                className="h-full w-full border border-black/10 bg-white"
+              />
+            </div>
+          ) : previewText ? (
+            <div className="p-5 sm:p-8">
+              <div className="border border-black/10 bg-[#fafafa] p-5 sm:p-8">
+                <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-black/70">
+                  {previewText}
+                </pre>
+              </div>
+            </div>
+          ) : previewUrl && isTextDocument ? (
+            <div className="h-[65vh] p-5 sm:p-8">
+              <iframe
+                src={previewUrl}
+                title={`Preview of ${document.name}`}
+                className="h-full w-full border border-black/10 bg-white"
+              />
+            </div>
+          ) : previewUrl ? (
+            <div className="h-[65vh] p-3 sm:p-5">
+              <iframe
+                src={previewUrl}
+                title={`Preview of ${document.name}`}
+                className="h-full w-full border border-black/10 bg-white"
+              />
+            </div>
           ) : (
             <div className="p-5 sm:p-8">
               <div className="border border-black/10 bg-[#fafafa] p-5 sm:p-8">
-                {previewText ? (
-                  <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-7 text-black/70">
-                    {previewText}
-                  </pre>
-                ) : (
-                  <div className="py-16 text-center">
-                    <FileText className="mx-auto mb-4 h-9 w-9 text-black/20" />
+                <div className="py-16 text-center">
+                  <FileText className="mx-auto mb-4 h-9 w-9 text-black/20" />
 
-                    <p className="text-sm text-black/45">
-                      No preview text available.
-                    </p>
+                  <p className="text-sm text-black/45">
+                    No preview available.
+                  </p>
 
-                    <p className="mt-2 text-xs text-black/30">
-                      The document was loaded, but the
-                      preview endpoint did not return
-                      readable text.
-                    </p>
-                  </div>
-                )}
+                  <p className="mt-2 text-xs text-black/30">
+                    The document was loaded, but the
+                    preview endpoint did not return
+                    readable content.
+                  </p>
+                </div>
               </div>
             </div>
           )}
